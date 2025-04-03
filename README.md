@@ -1,198 +1,342 @@
-# Agentic Memory 🧠
+# A-Mem: Agentic Memory System
 
-A novel agentic memory system for LLM agents that can dynamically organize memories in an agentic way.
+A-Mem is a novel agentic memory system for Language Model (LLM) agents that dynamically organizes memories based on semantic structure, relationships, and agent-specific considerations, optimizing for effective retrieval and informed decision-making.
 
-## Introduction 🌟
+## Key Features
 
-Large Language Model (LLM) agents have demonstrated remarkable capabilities in handling complex real-world tasks through external tool usage. However, to effectively leverage historical experiences, they require sophisticated memory systems. Traditional memory systems, while providing basic storage and retrieval functionality, often lack advanced memory organization capabilities.
+- **Dynamic Memory Organization**: Memories are stored with rich metadata and organized dynamically rather than in static structures
+- **Intelligent Indexing**: Utilizes hybrid retrieval with vector embedding similarity and BM25 lexical search
+- **Comprehensive Note Generation**: Automatically extracts keywords, summaries, and context
+- **Interconnected Knowledge Network**: Creates links between related memories
+- **Continuous Memory Evolution**: Updates memory metadata when new related information is encountered
 
-Our project introduces an innovative **Agentic Memory** system that revolutionizes how LLM agents manage and utilize their memories:
+## Framework
 
-<div align="center">
-  <img src="Figure/intro-a.jpg" alt="Traditional Memory System" width="600"/>
-  <img src="Figure/intro-b.jpg" alt="Our Proposed Agentic Memory" width="600"/>
-  <br>
-  <em>Comparison between traditional memory system (top) and our proposed agentic memory (bottom). Our system enables dynamic memory operations and flexible agent-memory interactions.</em>
-</div>
+A-Mem employs a flexible framework to organize memories:
 
-> **Note:** This repository provides a memory system to facilitate agent construction. If you want to reproduce the results presented in our paper, please refer to: [https://github.com/WujiangXu/AgenticMemory](https://github.com/WujiangXu/AgenticMemory)
+1. **Memory Notes**: Atomic units with content and metadata
+2. **Metadata Structure**: Includes keywords, context, type, timestamps, related notes, sentiment, and importance
+3. **Hybrid Search**: Combines semantic and keyword-based search
+4. **Memory Evolution**: Updates metadata as related information is encountered
 
-For more details, please refer to our paper: [A-MEM: Agentic Memory for LLM Agents](https://arxiv.org/pdf/2502.12110)
+## Installation
 
-
-## Key Features ✨
-
-- 🔄 Dynamic memory organization based on Zettelkasten principles
-- 🔍 Intelligent indexing and linking of memories
-- 📝 Comprehensive note generation with structured attributes
-- 🌐 Interconnected knowledge networks
-- 🧬 Continuous memory evolution and refinement
-- 🤖 Agent-driven decision making for adaptive memory management
-
-## Framework 🏗️
-
-<div align="center">
-  <img src="Figure/framework.jpg" alt="Agentic Memory Framework" width="800"/>
-  <br>
-  <em>The framework of our Agentic Memory system showing the dynamic interaction between LLM agents and memory components.</em>
-</div>
-
-## How It Works 🛠️
-
-When a new memory is added to the system:
-1. Generates comprehensive notes with structured attributes
-2. Creates contextual descriptions and tags
-3. Analyzes historical memories for relevant connections
-4. Establishes meaningful links based on similarities
-5. Enables dynamic memory evolution and updates
-
-## Results 📊
-
-Empirical experiments conducted on six foundation models demonstrate superior performance compared to existing SOTA baselines.
-
-## Getting Started 🚀
-
-1. Clone the repository:
 ```bash
-git clone https://github.com/WujiangXu/AgenticMemory.git
-cd AgenticMemory
-```
-
-2. Install dependencies:
-Option 1: Using venv (Python virtual environment)
-```bash
-# Create and activate virtual environment
-python -m venv .venv
-source .venv/bin/activate  # Linux/Mac
-.venv\Scripts\activate     # Windows
-
-# Install dependencies
 pip install -r requirements.txt
 ```
 
-Option 2: Using Conda
-```bash
-# Create and activate conda environment
-conda create -n myenv python=3.9
-conda activate myenv
+## Usage
 
-# Install dependencies
-pip install -r requirements.txt
-```
-
-3. Usage Examples 💡
-
-Here's how to use the Agentic Memory system for basic operations:
+### Creating Memories
 
 ```python
 from memory_system import AgenticMemorySystem
 
-# Initialize the memory system 🚀
+# Initialize the memory system
 memory_system = AgenticMemorySystem(
-    model_name='all-MiniLM-L6-v2',  # Embedding model for semantic search
-    llm_backend="openai",           # LLM backend (openai/mock/ollama)
-    llm_model="gpt-4"              # LLM model name
+    # Optional configuration parameters
+    project_name="my_project",
+    llm_backend="openai",  # or "gemini", "ollama", "mock"  
+    llm_model="gpt-4"      # model name specific to the backend
 )
 
-# Create (Add) Memories ➕
-# Simple creation
-memory_id = memory_system.create("Deep learning neural networks")
+# Create a memory note
+note = memory_system.create("The Golden Gate Bridge is located in San Francisco.")
+print(f"Created note with ID: {note.id}")
+```
 
-# Creation with metadata
-memory_id = memory_system.create(
-    content="Machine learning project notes",
-    tags=["ml", "project"],
-    category="Research",
-    timestamp="202503021500"  # YYYYMMDDHHmm format
+### Reading Memories
+
+```python
+# Retrieve a memory by ID
+note = memory_system.read("note_id_here")
+if note:
+    print(f"Content: {note.content}")
+    print(f"Keywords: {note.metadata.get('keywords', [])}")
+    print(f"Created at: {note.created_at}")
+```
+
+### Updating Memories
+
+```python
+# Update a memory's content
+updated_note = memory_system.update("note_id_here", "Updated content here")
+print(f"Updated note: {updated_note.content}")
+```
+
+### Deleting Memories
+
+```python
+# Delete a memory
+success = memory_system.delete("note_id_here")
+print(f"Deletion successful: {success}")
+```
+
+### Searching Memories
+
+```python
+# Basic semantic search
+results = memory_system.search("San Francisco landmarks", top_k=5)
+for note in results:
+    print(f"ID: {note.id}, Content: {note.content}")
+
+# Hybrid search (combining semantic and keyword search)
+results = memory_system.search(
+    "San Francisco landmarks", 
+    top_k=5,
+    keywords=["bridge", "tourist"]
 )
-
-# Read (Retrieve) Memories 📖
-# Get memory by ID
-memory = memory_system.read(memory_id)
-print(f"Content: {memory.content}")
-print(f"Tags: {memory.tags}")
-print(f"Context: {memory.context}")
-print(f"Keywords: {memory.keywords}")
-
-# Search memories
-results = memory_system.search("neural networks", k=5)
-for result in results:
-    print(f"ID: {result['id']}")
-    print(f"Content: {result['content']}")
-    print(f"Score: {result['score']}")
-    print("---")
-
-# Update Memories 🔄
-memory_system.update(memory_id, "Updated content about deep learning")
-
-# Delete Memories ❌
-memory_system.delete(memory_id)
-
-# Memory Evolution 🧬
-# The system automatically evolves memories by:
-# 1. Finding semantic relationships
-# 2. Updating metadata and context
-# 3. Creating connections between related memories
-# This happens automatically when creating or updating memories!
 ```
 
-### Advanced Features 🌟
+## Features
 
-1. **Hybrid Search** 🔍
-   - Combines ChromaDB vector search and embedding-based retrieval
-   - Automatically deduplicates and ranks results
-   - Returns most relevant memories first
+- 💾 Store memories with rich metadata
+- 🔍 Retrieve memories using semantic search 
+- 🧠 Automatic summarization and abstraction
+- 🔄 Track changes in information over time
+- 📈 Automatically track importance and relevance
+- 📝 Support for structured and unstructured data
+- 🚀 Built-in MCP-compatible server for easy integration
+- 🧩 MCP compatible for agent ecosystems
+- 🧪 Comprehensive test suite with mocks
+- 🌟 Support for specialized embedding task types (Gemini)
+- 🤖 LLM-powered content analysis and segmentation
 
-2. **Memory Evolution** 🧬
-   - Automatically analyzes content relationships
-   - Updates tags and context based on related memories
-   - Creates semantic connections between memories
+## Specialized Embedding Task Types
 
-3. **Flexible Metadata** 📋
-   - Custom tags and categories
-   - Automatic keyword extraction
-   - Context generation
-   - Timestamp tracking
+A-Mem supports specialized embedding task types with the Gemini API, which improves retrieval performance for different content types:
 
-4. **Multiple LLM Backends** 🤖
-   - OpenAI (GPT-4, GPT-3.5)
-   - Ollama (for local deployment)
+### Currently supported task types:
 
-### Best Practices 💪
+- `RETRIEVAL_DOCUMENT`: Optimized for embedding documents to be retrieved later
+- `RETRIEVAL_QUERY`: Optimized for embedding queries to search for documents
+- `CODE_RETRIEVAL_DOCUMENT`: Optimized for embedding code snippets
+- `CODE_RETRIEVAL_QUERY`: Optimized for embedding queries to search for code
+- `QUESTION_ANSWERING`: Optimized for Q&A applications
 
-1. **Memory Creation** ✨:
-   - Provide clear, specific content
-   - Add relevant tags for better organization
-   - Let the system handle context and keyword generation
+The system automatically detects the content type (code, question, or general text) and applies the appropriate task type for embeddings.
 
-2. **Memory Retrieval** 🔍:
-   - Use specific search queries
-   - Adjust 'k' parameter based on needed results
-   - Consider both exact and semantic matches
+### Example
 
-3. **Memory Evolution** 🧬:
-   - Allow automatic evolution to organize memories
-   - Review generated connections periodically
-   - Use consistent tagging conventions
+We provide an example script to demonstrate the effectiveness of specialized task types:
 
-4. **Error Handling** ⚠️:
-   - Always check return values
-   - Handle potential KeyError for non-existent memories
-   - Use try-except blocks for LLM operations
-
-## Citation 📚
-
-If you use this code in your research, please cite our work:
-
-```bibtex
-@article{xu2025mem,
-  title={A-mem: Agentic memory for llm agents},
-  author={Xu, Wujiang and Liang, Zujie and Mei, Kai and Gao, Hang and Tan, Juntao and Zhang, Yongfeng},
-  journal={arXiv preprint arXiv:2502.12110},
-  year={2025}
-}
+```bash
+# Set your Google API key first
+export GOOGLE_API_KEY=your_api_key_here
+python examples/gemini_task_types_example.py
 ```
 
-## License 📄
+This example compares embeddings generated with different task types and shows how they affect search results.
 
-This project is licensed under the MIT License. See LICENSE for details.
+## LLM-Powered Content Analysis and Segmentation
+
+A-Mem uses LLMs to intelligently analyze and segment mixed content, providing more sophisticated handling than rule-based methods:
+
+### Content Analysis
+
+- **Advanced type detection**: Uses LLM to classify content with higher precision
+- **Mixed content detection**: Identifies when content contains multiple types (code, documentation, questions)
+- **Confidence scoring**: Provides confidence levels for content classification
+- **Type proportions**: Analyzes the percentage breakdown of different content types
+- **Optimal task type selection**: Dynamically determines the best embedding task type for each content piece
+
+### Content Segmentation
+
+- **Intelligent boundaries**: Identifies natural segment boundaries in mixed content
+- **Coherent chunks**: Extracts semantically coherent parts while preserving syntactic structures
+- **Segment metadata**: Generates rich metadata for each segment (type, subtitles, language detection)
+- **Parent-child relationships**: Maintains connections between segments and original content
+- **Individual optimization**: Each segment gets its optimal embedding task type
+
+### Example
+
+We provide an example script that demonstrates the advanced content analysis and segmentation:
+
+```bash
+# Set your API key first (works with both OpenAI and Google API keys)
+export OPENAI_API_KEY=your_api_key_here
+# or
+export GOOGLE_API_KEY=your_api_key_here
+
+python examples/llm_segmentation_example.py
+```
+
+This example shows how mixed content (like a tutorial with code snippets, explanations, and questions) gets analyzed and segmented, with each part stored and retrieved optimally.
+
+## Server Implementation
+
+A-Mem can be deployed as a server using the MCP (Machine-Centric Protocol) interface:
+
+```bash
+python mcp_fastmcp_server.py
+```
+
+### Configuration
+
+Configure the server using environment variables or command-line arguments:
+
+```bash
+# With environment variables
+export PROJECT_NAME=my_project
+export LLM_BACKEND=openai
+export OPENAI_API_KEY=your_api_key
+python mcp_fastmcp_server.py
+
+# With command-line arguments
+python mcp_fastmcp_server.py --project-name my_project --llm-backend openai --openai-api-key your_api_key
+```
+
+See the `.env.example` file for all available configuration options.
+
+## Testing
+
+The A-Mem project includes a comprehensive test suite that verifies the functionality of different components:
+
+### Running Tests
+
+To install test dependencies:
+
+```bash
+pip install -r requirements.txt
+```
+
+To run all tests:
+
+```bash
+python run_tests.py --all
+```
+
+To run specific test suites:
+
+```bash
+python run_tests.py --mock      # Run mock tests only
+python run_tests.py --memory    # Run memory system tests only
+python run_tests.py --fastmcp   # Run FastMCP server tests only
+python run_tests.py --mcpclient # Run MCP client tests against Docker
+```
+
+### Docker Integration Tests
+
+The project includes integration tests that verify functionality against the A-Mem server running in Docker:
+
+1. Start the Docker container:
+
+```bash
+docker-compose up -d
+```
+
+2. Run the Docker integration tests:
+
+```bash
+python run_tests.py --docker
+```
+
+These tests will connect to the running Docker container and verify that all memory operations work correctly.
+
+### Test Types
+
+- **Mock Tests**: Unit tests using mock implementations to test core functionality without external dependencies.
+- **Memory System Tests**: Tests for the memory system module with mocked dependencies.
+- **FastMCP Tests**: Tests for the MCP server implementation using the official FastMCP library.
+- **MCP Client Tests**: Integration tests that connect to a running A-Mem server using the MCP client protocol.
+
+All tests use mock implementations where appropriate to avoid external dependencies, making them easy to run without setting up complex environments.
+
+## License
+
+[MIT License](LICENSE)
+
+# Using Supergateway with MCP Servers
+
+This project demonstrates how to use [Supergateway](https://github.com/supercorp-ai/supergateway) to make MCP servers more accessible by exposing them via SSE (Server-Sent Events) or WebSockets.
+
+## Benefits of Supergateway
+
+- **Simplifies client-side code**: Expose stdio MCP servers via HTTP/SSE or WebSockets
+- **Standardized API endpoints**: Consistent `/sse` and `/message` endpoints
+- **Cross-platform compatibility**: Works with any MCP server regardless of language
+- **Built-in features**: CORS support, health endpoints, logging
+
+## Setup Instructions
+
+### Installation
+
+```bash
+# Install Supergateway globally
+npm install -g supergateway
+```
+
+### Starting Supergateway with an MCP Server
+
+Use the `start_supergateway.sh` script:
+
+```bash
+./start_supergateway.sh --port=8001
+```
+
+Or manually:
+
+```bash
+npx supergateway \
+  --stdio "python your_mcp_server.py" \
+  --port 8000 \
+  --cors \
+  --logLevel info
+```
+
+### Connecting to Remote MCP Servers
+
+You can also use Supergateway to connect to remote MCP servers:
+
+```bash
+npx supergateway \
+  --sse "https://your-remote-mcp-server-url" \
+  --header "Authorization: Bearer your-auth-token" \
+  --outputTransport stdio
+```
+
+## Client Usage
+
+### Python Client
+
+We provide a Python client implementation in `supergateway_client.py`:
+
+```python
+from supergateway_client import SupergatewaySseClient
+
+# Create client
+client = SupergatewaySseClient(base_url="http://localhost:8000", user_id="test-user")
+
+# Start the connection
+await client.start()
+
+# List available tools
+tools = await client.list_tools()
+
+# Execute a tool
+result = await client.execute_tool("tool_name", {"arg1": "value1"})
+```
+
+### Session Management
+
+When using Supergateway with MCP servers:
+
+1. The client generates a random session ID and passes it in requests
+2. Supergateway maintains session state internally
+3. Messages sent to the `/message` endpoint must include the same session ID
+4. Responses are delivered via the SSE connection to the matching session
+
+## Troubleshooting
+
+- **Session errors**: Ensure the same session ID is used for both SSE connection and message requests
+- **Connection issues**: Try different SSE endpoint paths (/, /sse) as these can vary by server
+- **Timeout errors**: Increase timeout values for long-running operations
+
+## Advanced Configuration
+
+See [Supergateway documentation](https://github.com/supercorp-ai/supergateway) for more configuration options, including:
+
+- WebSocket support
+- Custom endpoint paths
+- Authentication headers
+- Health endpoints
