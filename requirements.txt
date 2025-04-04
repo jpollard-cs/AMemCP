@@ -1,5 +1,6 @@
 sentence-transformers>=2.2.2
-chromadb>=0.4.22
+chromadb>=1.0.0
+chromadb-client>=1.0.0
 rank_bm25>=0.2.2
 nltk>=3.8.1
 transformers>=4.36.2
@@ -31,5 +32,9 @@ websockets>=15.0.1
 httpx>=0.20.0
 
 # ASGI Framework (for mounting sse_app)
-starlette>=0.46.1
+starlette>=0.40.0,<0.46.0
 sse-starlette>=2.2.1
+
+colorlog>=6.9.0
+
+psutil>=7.0.0

@@ -1,0 +1,16 @@
+# Development and Linting/Formatting Dependencies
+pre-commit>=3.5.0
+black>=24.1.0
+flake8>=7.0.0
+isort>=5.13.0
+autoflake>=2.2.0
+
+# Flake8 plugins used in pre-commit:
+flake8-bugbear
+flake8-comprehensions
+flake8-simplify
+
+# Additional tools from Makefile
+bandit
+safety
+autopep8

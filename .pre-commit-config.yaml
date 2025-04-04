@@ -1,0 +1,53 @@
+repos:
+-   repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.6.0 # Using latest stable version
+    hooks:
+    -   id: trailing-whitespace
+    -   id: end-of-file-fixer
+    -   id: check-yaml
+    -   id: check-added-large-files
+    -   id: check-toml
+    -   id: debug-statements
+    -   id: check-json
+    -   id: detect-private-key
+
+-   repo: https://github.com/pycqa/autoflake
+    rev: v2.3.1 # Using latest stable version
+    hooks:
+    -   id: autoflake
+        args: [
+            --remove-all-unused-imports,
+            --remove-unused-variables,
+            --ignore-init-module-imports,
+            --in-place
+        ]
+
+-   repo: https://github.com/pycqa/isort
+    rev: 5.13.2 # Matching analyzed project
+    hooks:
+    -   id: isort
+        args: [--profile=black, --line-length=120]
+
+-   repo: https://github.com/psf/black
+    rev: 24.8.0 # Using latest stable version
+    hooks:
+    -   id: black
+        args: [--line-length=120]
+
+-   repo: https://github.com/pycqa/flake8
+    rev: 7.1.0 # Using latest stable version
+    hooks:
+    -   id: flake8
+        additional_dependencies: [
+            'flake8-bugbear',
+            'flake8-comprehensions',
+            'flake8-simplify',
+        ]
+
+-   repo: https://github.com/pycqa/bandit
+    rev: 1.7.9 # Use latest stable version
+    hooks:
+    -   id: bandit
+        args: [-r, .] # Scan recursively from root
+        # Add exclusions if needed, e.g.:
+        # exclude: ^tests/

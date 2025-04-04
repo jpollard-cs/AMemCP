@@ -1,4 +1,76 @@
-# A-Mem: Agentic Memory System
+# AMemCP - Agentic Memory System with Model Context Protocol
+
+An agentic memory system that provides persistent storage and semantic search capabilities for AI agents, with connections via the Model Context Protocol (MCP).
+
+## Latest Updates
+
+- **ChromaDB 1.0.0 Support**: Updated to use the latest ChromaDB with improved performance and stability
+- **Async HTTP Client**: Using the dedicated ChromaDB client package for HTTP connections
+- **Colorful Logging**: Enhanced logging with colorful output and emojis for better readability
+
+## Project Structure
+
+- `mcp_fastmcp_server.py` - Main FastMCP server implementation
+- `memory_system.py` - Core memory system with async retrieval capabilities
+- `utils.py` - Shared utilities for logging and constants
+- `mcp_sse_client.py` - SSE client for connecting to the MCP server
+- `mcp_sse_server.py` - SSE server implementation
+- `sse_helper.py` - Helper utilities for SSE communication
+
+## Shared Utilities
+
+The `utils.py` module provides common functionality used across multiple modules:
+
+- Colorful logging setup with `colorlog`
+- Common constants for model names and default settings
+- Shared configuration handling
+- ChromaDB settings management
+
+### Usage
+
+```python
+# Import utilities
+from utils import setup_logger, DEFAULT_PERSIST_DIR, get_chroma_settings
+
+# Set up a logger for your module
+logger = setup_logger(__name__)
+
+# Use the logger
+logger.info("This is an info message")
+logger.debug("This is a debug message")
+logger.warning("This is a warning message")
+logger.error("This is an error message")
+
+# Get ChromaDB settings
+from chromadb import Client
+client = Client(get_chroma_settings("/path/to/persist"))
+```
+
+## Environment Variables
+
+The application can be configured using the following environment variables:
+
+- `PROJECT_NAME` - Name of the project (default: "default")
+- `LLM_BACKEND` - LLM provider to use (default: "gemini")
+- `LLM_MODEL` - LLM model name
+- `EMBED_MODEL` - Embedding model name
+- `GOOGLE_API_KEY` - Google API key for Gemini models
+- `OPENAI_API_KEY` - OpenAI API key for OpenAI models
+- `PERSIST_DIRECTORY` - Directory to persist data
+- `JINA_RERANKER_MODEL` - Jina reranker model name
+- `JINA_API_KEY` - Jina API key
+
+## Running the Server
+
+```bash
+# Start the server
+python mcp_sse_server.py --verbose
+
+# In another terminal, connect a client
+python mcp_sse_client.py --use-patched-client --verbose
+```
+
+## A-Mem: Agentic Memory System
 
 A-Mem is a novel agentic memory system for Language Model (LLM) agents that dynamically organizes memories based on semantic structure, relationships, and agent-specific considerations, optimizing for effective retrieval and informed decision-making.
 
@@ -36,7 +108,7 @@ from memory_system import AgenticMemorySystem
 memory_system = AgenticMemorySystem(
     # Optional configuration parameters
     project_name="my_project",
-    llm_backend="openai",  # or "gemini", "ollama", "mock"  
+    llm_backend="openai",  # or "gemini", "ollama", "mock"
     llm_model="gpt-4"      # model name specific to the backend
 )
 
@@ -82,7 +154,7 @@ for note in results:
 
 # Hybrid search (combining semantic and keyword search)
 results = memory_system.search(
-    "San Francisco landmarks", 
+    "San Francisco landmarks",
     top_k=5,
     keywords=["bridge", "tourist"]
 )
@@ -91,7 +163,7 @@ results = memory_system.search(
 ## Features
 
 - 💾 Store memories with rich metadata
-- 🔍 Retrieve memories using semantic search 
+- 🔍 Retrieve memories using semantic search
 - 🧠 Automatic summarization and abstraction
 - 🔄 Track changes in information over time
 - 📈 Automatically track importance and relevance

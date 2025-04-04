@@ -1,0 +1,65 @@
+version: '3.8'
+
+services:
+  amem-mcp-server:
+    build: .
+    image: amem-mcp-server
+    container_name: amem-mcp-server
+    ports:
+      - "8000:8000"
+    volumes:
+      - .:/app
+      - ./data/chroma_db:/app/data/chroma_db
+    environment:
+      # Project configuration
+      - PROJECT_NAME=${PROJECT_NAME:-default}
+
+      # LLM backend configuration (openai, gemini, ollama, mock)
+      - LLM_BACKEND=${LLM_BACKEND:-mock}
+      - LLM_MODEL=${LLM_MODEL:-}
+      - EMBED_MODEL=${EMBED_MODEL:-}
+
+      # API keys for different providers
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY:-}
+      - API_KEY=${API_KEY:-}  # Generic fallback API key
+
+      # Server configuration
+      - HOST=0.0.0.0
+      - PORT=8000
+
+      # Logging configuration
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+
+      # Use mocks for testing
+      - USING_MOCKS=1
+
+      # GPU configuration
+      - USE_GPU=${USE_GPU:-auto}  # 'auto', 'true', or 'false'
+      - PYTORCH_ENABLE_MPS_FALLBACK=1
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5s
+    command: >
+      uvicorn mcp_fastmcp_server:app
+      --host 0.0.0.0
+      --port 8000
+    networks:
+      - amem-network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+networks:
+  amem-network:
+    driver: bridge
+
+volumes:
+  chroma-data:
+    driver: local

@@ -1,0 +1,48 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+
+# Environment variables
+.env
+
+# MCP
+# no way to load env variables for MCP from .env file
+# so we we will leave this out for now until it's fixed
+.cursor/mcp.json
+
+# Project-specific
+uploads/
+audio_output/
+get-pip.py
+
+# CodeQL
+codeql-results.sarif
+codeql_db/
+
+# Unit test reports
+test-reports/
+
+# Test Data
+books/
+
+# Coverage reports
+.coverage
+htmlcov/
+coverage.xml
+.coverage.*
+
+# Cursor
+.cursorignore
+
+# Logs
+*.log
+
+# data
+data/
