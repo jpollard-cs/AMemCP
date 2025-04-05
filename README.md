@@ -2,6 +2,8 @@
 
 An agentic memory system that provides persistent storage and semantic search capabilities for AI agents, with connections via the Model Context Protocol (MCP).
 
+This is still a work in progress and much it it was "vibe coded". Its now being formalized / cleaned-up. Contributions are welcome.
+
 ## A-Mem: Agentic Memory System
 
 A-Mem is a novel agentic memory system for Language Model (LLM) agents that dynamically organizes memories based on semantic structure, relationships, and agent-specific considerations, optimizing for effective retrieval and informed decision-making.
@@ -229,11 +231,13 @@ This example shows how mixed content (like a tutorial with code snippets, explan
 
 ## Server Implementation
 
-A-Mem can be deployed as a server using the MCP (Machine-Centric Protocol) interface:
+A-Mem can be deployed as a server using the MCP interface:
 
 ```bash
-python mcp_fastmcp_server.py
+python ./amem/server/mcp_fastmcp_server.py
 ```
+
+The server was designed as an SSE server to make it easier to allow for flexibility of loading local models in memory. There are certainly ways to delegate this to external services and/or have the MCP server exist as a thin Stdio layer over the server - open to discussion and contributions. The server can also be run in Docker.
 
 ### Configuration
 
@@ -252,67 +256,10 @@ python mcp_fastmcp_server.py --project-name my_project --llm-backend openai --op
 
 See the `.env.example` file for all available configuration options.
 
-## Testing
-
-The A-Mem project includes a comprehensive test suite that verifies the functionality of different components:
-
-### Running Tests
-
-To install test dependencies:
-
-```bash
-pip install -r requirements.txt
-```
-
-To run all tests:
-
-```bash
-python run_tests.py --all
-```
-
-To run specific test suites:
-
-```bash
-python run_tests.py --mock      # Run mock tests only
-python run_tests.py --memory    # Run memory system tests only
-python run_tests.py --fastmcp   # Run FastMCP server tests only
-python run_tests.py --mcpclient # Run MCP client tests against Docker
-```
-
-### Docker Integration Tests
-
-The project includes integration tests that verify functionality against the A-Mem server running in Docker:
-
-1. Start the Docker container:
-
-```bash
-docker-compose up -d
-```
-
-2. Run the Docker integration tests:
-
-```bash
-python run_tests.py --docker
-```
-
-These tests will connect to the running Docker container and verify that all memory operations work correctly.
-
-### Test Types
-
-- **Mock Tests**: Unit tests using mock implementations to test core functionality without external dependencies.
-- **Memory System Tests**: Tests for the memory system module with mocked dependencies.
-- **FastMCP Tests**: Tests for the MCP server implementation using the official FastMCP library.
-- **MCP Client Tests**: Integration tests that connect to a running A-Mem server using the MCP client protocol.
-
-All tests use mock implementations where appropriate to avoid external dependencies, making them easy to run without setting up complex environments.
-
-## License
-
-[MIT License](LICENSE)
 
 ## TypeScript Client
 
-The project includes a TypeScript client for connecting to the AMemCP server. The client uses the Model Context Protocol (MCP) SDK to communicate with the server.
+The project includes a TypeScript client for connecting to the AMemCP server. The client uses the TS Model Context Protocol (MCP) SDK to communicate with the server. At present the client is mainly used for testing.
 
 ### Client Features
 
@@ -335,3 +282,7 @@ npm run dev
 ```
 
 For more details, see the [client README](./client/README.md).
+
+## License
+
+[MIT License](LICENSE)
