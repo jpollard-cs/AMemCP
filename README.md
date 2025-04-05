@@ -140,7 +140,7 @@ if note:
 
 ```python
 # Update a memory's content
-updated_note = awaitmemory_system.update("note_id_here", "Updated content here")
+updated_note = await memory_system.update("note_id_here", "Updated content here")
 print(f"Updated note: {updated_note.content}")
 ```
 
