@@ -180,26 +180,26 @@ def fallback_to_cpu_if_needed(func):
 
 def load_model(model_name_or_path: str, use_gpu: Optional[bool] = None) -> torch.nn.Module:
     """Load a PyTorch model and move it to the appropriate device.
-    
+
     Args:
         model_name_or_path: Name or path of the model to load
         use_gpu: If True, will use GPU if available. If False, forces CPU usage.
                 If None, auto-detects and uses GPU if available.
-                
+
     Returns:
         The loaded model on the appropriate device
     """
     try:
         # Get the best device for this system
         device = get_device(use_gpu)
-        
+
         # Here you would have your loading logic, e.g. with HuggingFace transformers
         # For now, just a placeholder:
         from transformers import AutoModel
-        
+
         logger.info(f"Loading model: {model_name_or_path}")
         model = AutoModel.from_pretrained(model_name_or_path)
-        
+
         # Safely move to device
         return safely_move_to_device(model, device)
     except Exception as e:

@@ -30,6 +30,7 @@ print("--- mcp_fastmcp_server.py module execution started ---")  # Top-level dia
 # Load environment variables from the root .env file
 # Use find_dotenv to locate the .env file in the parent directories
 from dotenv import find_dotenv
+
 dotenv_path = find_dotenv(usecwd=True)
 if dotenv_path:
     print(f"Loading environment variables from: {dotenv_path}")
@@ -77,7 +78,7 @@ async def starlette_lifespan(app: Starlette) -> AsyncIterator[dict]:
         # Initialize memory system with timeout
         logger.info("Initializing memory system...")
         await memory_system.initialize()
-        
+
         # Get the embedding function from the memory system's LLM controller for search
         if hasattr(memory_system, "llm_controller") and memory_system.llm_controller:
             embedding_function = memory_system.llm_controller
@@ -91,19 +92,14 @@ async def starlette_lifespan(app: Starlette) -> AsyncIterator[dict]:
 
         # Both yield the context dictionary and use app.state
         yield {
-            "memory_system": memory_system, 
+            "memory_system": memory_system,
             "initialization_complete": initialization_complete,
-            "embedding_function": embedding_function
+            "embedding_function": embedding_function,
         }
     except Exception as e:
         logger.error(f"❌ Error during memory system initialization: {e}", exc_info=True)
         # Still yield but with error status
-        yield {
-            "memory_system": None, 
-            "initialization_complete": False, 
-            "error": str(e),
-            "embedding_function": None
-        }
+        yield {"memory_system": None, "initialization_complete": False, "error": str(e), "embedding_function": None}
     finally:
         # Cleanup on shutdown
         logger.info("Starlette Lifespan: Shutting down memory system")
@@ -351,8 +347,12 @@ async def delete_memory(memory_id: str, ctx: Context = None) -> Dict[str, bool]:
 
 @mcp.tool()
 async def search_memories(
-    query: str, top_k: int = 5, use_reranker: bool = True, use_embeddings: bool = True, 
-    metadata_filter: Optional[Dict[str, Any]] = None, ctx: Context = None
+    query: str,
+    top_k: int = 5,
+    use_reranker: bool = True,
+    use_embeddings: bool = True,
+    metadata_filter: Optional[Dict[str, Any]] = None,
+    ctx: Context = None,
 ) -> Dict[str, Any]:
     """Search for memory notes using semantic similarity.
 
@@ -387,28 +387,30 @@ async def search_memories(
         initialization_complete = lifespan_state.get("initialization_complete", False)
         if not initialization_complete:
             logger.error("❌ Memory system not fully initialized")
-            return {"count": 0, "memories": [], "error": "Memory system not fully initialized yet. Please try again later."}
+            return {
+                "count": 0,
+                "memories": [],
+                "error": "Memory system not fully initialized yet. Please try again later.",
+            }
 
         memory_system = lifespan_state.get("memory_system")
         if not memory_system:
             logger.error("❌ Error accessing memory system from lifespan context")
             return {"count": 0, "memories": [], "error": "Memory system not available"}
-            
+
         # If embeddings are requested but we don't have an embedding function, warn and fallback
         if use_embeddings:
             embedding_function = lifespan_state.get("embedding_function")
             if not embedding_function:
-                logger.warning("⚠️ Embeddings requested but no embedding function available, falling back to BM25 search")
+                logger.warning(
+                    "⚠️ Embeddings requested but no embedding function available, falling back to BM25 search"
+                )
                 use_embeddings = False
-                
+
         memories = await memory_system.search(
-            query, 
-            k=top_k, 
-            use_reranker=use_reranker,
-            use_embeddings=use_embeddings,
-            metadata_filter=metadata_filter
+            query, k=top_k, use_reranker=use_reranker, use_embeddings=use_embeddings, metadata_filter=metadata_filter
         )
-        
+
         logger.info(f"✅ Search complete. Found {len(memories)} results")
         return {"count": len(memories), "memories": [m.to_dict() for m in memories]}
     except Exception as e:
@@ -543,6 +545,7 @@ def summarize_memory(memory_id: str) -> List[base.Message]:
 # Starlette Routing
 # ------------------------
 
+
 async def health_check(request):
     """Simple health check endpoint at the root path."""
     # Access the lifespan context directly from the request state if middleware is used
@@ -556,7 +559,7 @@ async def health_check(request):
     }
     if initialization_error:
         response_data["error"] = initialization_error
-        
+
     return JSONResponse(response_data)
 
 

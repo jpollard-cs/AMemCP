@@ -61,4 +61,4 @@ These examples complement the TypeScript client located in the `client/` directo
 
 1. Make sure you have the required API keys set in your environment variables or `.env` file
 2. Install all dependencies from the project's main requirements
-3. Run any example using the commands shown above 
+3. Run any example using the commands shown above

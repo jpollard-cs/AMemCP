@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Setup script for the AMemCP package."""
 
-from setuptools import setup, find_packages
+from setuptools import find_packages, setup
 
 # Read requirements.txt
 with open("requirements.txt") as f:
@@ -30,6 +30,6 @@ setup(
         "Development Status :: 3 - Alpha",
         "Intended Audience :: Developers",
         "License :: OSI Approved :: MIT License",
-        "Programming Language :: Python :: 3.11"
+        "Programming Language :: Python :: 3.11",
     ],
-) 
+)

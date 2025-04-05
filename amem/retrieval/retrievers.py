@@ -434,8 +434,11 @@ class BaseRetriever(ABC):
 
 class AsyncChromaRetriever(BaseRetriever):
     async def search(
-        self, query: str, top_k: int = 5, embedding: List[float] = None, 
-        metadata_filter: Optional[Dict[str, Any]] = None
+        self,
+        query: str,
+        top_k: int = 5,
+        embedding: List[float] = None,
+        metadata_filter: Optional[Dict[str, Any]] = None,
     ):
         """Search for documents in ChromaDB.
 
@@ -451,16 +454,13 @@ class AsyncChromaRetriever(BaseRetriever):
         results = None
         try:
             # Prepare query parameters
-            query_params = {
-                "n_results": top_k, 
-                "include": ["documents", "metadatas", "distances"]
-            }
-            
+            query_params = {"n_results": top_k, "include": ["documents", "metadatas", "distances"]}
+
             # Add metadata filter if provided
             if metadata_filter:
                 query_params["where"] = metadata_filter
                 logger.debug(f"Using metadata filter: {metadata_filter}")
-                
+
             if embedding is not None:
                 # Use pre-computed embedding
                 logger.debug(f"Searching Chroma with pre-computed embedding, top_k={top_k}")

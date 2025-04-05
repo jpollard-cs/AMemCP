@@ -4,7 +4,6 @@ LLM Controller Module
 Handles interactions with various LLM backends
 """
 
-import logging
 from abc import ABC, abstractmethod
 from typing import Any, Dict, List, Optional
 

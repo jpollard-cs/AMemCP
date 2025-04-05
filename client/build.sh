@@ -12,4 +12,4 @@ fi
 # Build and run
 npm run dev
 
-echo "Done!" 
+echo "Done!"
