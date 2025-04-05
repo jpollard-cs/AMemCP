@@ -19,23 +19,16 @@ from sentence_transformers.cross_encoder import CrossEncoder
 from amem.core.llm_content_analyzer import LLMContentAnalyzer
 from amem.core.llm_controller import LLMController
 from amem.utils.utils import (
-    DEFAULT_PERSIST_DIR,
     DEFAULT_COLLECTION_PREFIX,
     DEFAULT_GEMINI_EMBED_MODEL,
     DEFAULT_GEMINI_LLM_MODEL,
     DEFAULT_JINA_RERANKER_MODEL,
-    setup_logger,
+    DEFAULT_PERSIST_DIR,
     get_chroma_settings,
+    setup_logger,
 )
 
 # Import async ChromaDB client
-import chromadb
-import nltk
-import numpy as np
-import re
-import ssl
-from chromadb.utils import embedding_functions
-from rank_bm25 import BM25Okapi
 
 # Set up logger
 logger = setup_logger(__name__)
@@ -362,7 +355,13 @@ class AsyncChromaRetriever:
             logger.error(f"❌ Error deleting document {doc_id} from ChromaDB: {e}")
             raise
 
-    async def search(self, query: str, top_k: int = 5, embedding: List[float] = None, metadata_filter: Optional[Dict[str, Any]] = None):
+    async def search(
+        self,
+        query: str,
+        top_k: int = 5,
+        embedding: List[float] = None,
+        metadata_filter: Optional[Dict[str, Any]] = None,
+    ):
         """Search for documents in ChromaDB.
 
         Args:
@@ -408,7 +407,9 @@ class AsyncChromaRetriever:
 
                     # Apply metadata filtering if specified
                     if metadata_filter and processed_metadata:
-                        if not all(str(processed_metadata.get(key)) == str(value) for key, value in metadata_filter.items()):
+                        if not all(
+                            str(processed_metadata.get(key)) == str(value) for key, value in metadata_filter.items()
+                        ):
                             continue
 
                     formatted_results.append(
@@ -437,6 +438,30 @@ class AsyncChromaRetriever:
         except Exception as e:
             logger.error(f"❌ Error getting all documents from ChromaDB: {e}")
             raise
+
+    async def update_metadata(self, doc_id: str, metadata: Dict[str, Any]) -> bool:
+        """
+        Update metadata for an existing document.
+
+        Args:
+            doc_id: ID of the document to update
+            metadata: New metadata to set
+
+        Returns:
+            True if successful, False otherwise
+        """
+        if not self.initialized:
+            logger.warning("ChromaDB retriever not initialized")
+            return False
+
+        try:
+            # Update metadata for the document
+            await self.collection.update(ids=[doc_id], metadatas=[metadata])
+            logger.debug(f"Updated metadata for document {doc_id}")
+            return True
+        except Exception as e:
+            logger.error(f"Error updating metadata for document {doc_id}: {e}")
+            return False
 
 
 class AsyncBM25Retriever:
@@ -599,25 +624,21 @@ class AgenticMemorySystem:
         jina_api_key: Optional[str] = None,  # Jina might require API key for some models/usage
         enable_llm_analysis: bool = False,
         enable_auto_segmentation: bool = False,
-        enable_feedback_requests: bool = False,
-        feedback_timeout: int = 60,  # Seconds to wait for feedback
         **kwargs,
     ):
-        """Initialize the real memory system.
+        """Initialize the Agentic Memory System.
 
         Args:
-            project_name: Name of the project for partitioning data.
-            llm_backend: The LLM provider ('gemini', 'openai', 'ollama', 'mock').
-            llm_model: The specific LLM model name.
-            embed_model: The specific embedding model name.
-            api_key: The API key for the chosen LLM provider (e.g., Google API Key).
-            persist_directory: Directory to persist ChromaDB data.
+            project_name: Name of the project for organization
+            llm_backend: LLM backend to use ("openai", "gemini", "ollama", "mock")
+            llm_model: Name of the LLM model to use
+            embed_model: Name of the embedding model to use
+            api_key: API key for the LLM backend
+            persist_directory: Directory to persist vector store data
             reranker_model: The Jina reranker model name.
             jina_api_key: Optional API key for Jina services.
             enable_llm_analysis: Whether to use LLM to analyze content and determine optimal storage
             enable_auto_segmentation: Whether to automatically segment mixed content into separate memories
-            enable_feedback_requests: Whether to allow requesting additional information when needed
-            feedback_timeout: Maximum time to wait for feedback responses in seconds
             **kwargs: Additional configuration options.
         """
         self.project_name = project_name
@@ -651,9 +672,6 @@ class AgenticMemorySystem:
         # Set up enhanced LLM features
         self.enable_llm_analysis = enable_llm_analysis
         self.enable_auto_segmentation = enable_auto_segmentation
-        self.enable_feedback_requests = enable_feedback_requests
-        self.feedback_timeout = feedback_timeout
-        self.feedback_callback = None  # Will be set by the client if feedback is enabled
 
         # Initialize Retrievers
         # Ensure unique collection name per project within the persist directory
@@ -786,6 +804,16 @@ class AgenticMemorySystem:
             }
 
     async def create(self, content: str, name: Optional[str] = None, **extra_metadata) -> MemoryNote:
+        """Create a new memory note.
+
+        Args:
+            content: The content of the memory note
+            name: Optional name for the memory
+            **extra_metadata: Additional metadata fields
+
+        Returns:
+            The created MemoryNote
+        """
         # ... (Initialization check is important here)
         if not self.initialized:
             logger.warning("Memory system not initialized. Call initialize() first.")
@@ -798,13 +826,193 @@ class AgenticMemorySystem:
 
         logger.info(f"🧠 Creating memory note. Name: '{name}'")
 
-        # 1. Analyze content (Calls helper, which now calls analyzer synchronously)
-        analysis = await self._analyze_content(content)
+        # Apply LLM analysis if enabled
+        if self.enable_llm_analysis:
+            # Use the content analyzer to analyze the content
+            analysis = await self._analyze_content(content)
+
+            # Use detected content type if not provided
+            if "type" not in extra_metadata:
+                extra_metadata["type"] = analysis.get("primary_type", "general")
+
+            # Get recommended storage task type
+            storage_task_type = analysis.get("storage_task_type")
+
+            # Add analysis results to metadata
+            extra_metadata["analysis_results"] = {
+                "primary_type": analysis.get("primary_type", "general"),
+                "confidence": analysis.get("confidence", 0.0),
+                "has_mixed_content": analysis.get("has_mixed_content", False),
+                "type_proportions": analysis.get("types", {}),
+            }
+        else:
+            # Default analysis without LLM
+            analysis = await self._analyze_content(content)
+            storage_task_type = analysis.get("storage_task_type")
+
+        # Apply auto-segmentation if enabled and content is mixed
+        if (
+            self.enable_auto_segmentation
+            and analysis.get("has_mixed_content", False)
+            and len(content) > 500
+            and hasattr(self, "content_analyzer")
+            and self.content_analyzer
+        ):
+            # Use the content analyzer to segment the content
+            segments = self.content_analyzer.segment_content(content)
+
+            if len(segments) > 1:
+                logger.info(f"Auto-segmenting content into {len(segments)} parts")
+
+                # Create a parent memory for the full content
+                parent_metadata = {
+                    **extra_metadata,
+                    "is_parent": True,
+                    "segment_count": len(segments),
+                }
+
+                # 1. Generate embedding (if needed)
+                parent_embedding = None
+                if self.llm_controller and storage_task_type:
+                    parent_embedding = self.llm_controller.get_embeddings(content, task_type=storage_task_type)
+
+                # 2. Prepare metadata
+                base_metadata = {
+                    # Keywords default to list, will be serialized later
+                    "keywords": parent_metadata.pop("keywords", []) or analysis.get("keywords", []),
+                    "summary": parent_metadata.pop("summary", "") or analysis.get("summary", ""),
+                    "context": parent_metadata.pop("context", "General"),
+                    "type": analysis.get("primary_type", "general"),
+                    # Related notes default to list, will be serialized later
+                    "related_notes": parent_metadata.pop("related_notes", []),
+                    "sentiment": parent_metadata.pop("sentiment", "neutral") or analysis.get("sentiment", "neutral"),
+                    "importance": parent_metadata.pop("importance", 0.5) or analysis.get("importance", 0.5),
+                    # Tags default to list, will be serialized later
+                    "tags": parent_metadata.pop("tags", []),
+                    "name": name or parent_metadata.pop("name", None),
+                    "storage_task_type": storage_task_type,
+                    "analysis_confidence": analysis.get("confidence", 0.0),
+                    "has_mixed_content": analysis.get("has_mixed_content", False),
+                    "is_parent": True,
+                    "segment_count": len(segments),
+                }
+
+                # Merge base metadata with any remaining extra_metadata
+                # Ensure timestamps are handled correctly
+                now = datetime.now().isoformat()
+                parent_metadata_to_store = {
+                    **base_metadata,
+                    **parent_metadata,  # Add remaining arbitrary metadata
+                    "created_at": now,
+                    "updated_at": now,
+                }
+
+                # Process metadata for storage
+                processed_parent_metadata = self._process_metadata_for_chroma(parent_metadata_to_store)
+
+                # 3. Store parent in retriever
+                parent_id = str(uuid.uuid4())
+                try:
+                    await self.chroma_retriever.add_document(
+                        document=content,
+                        doc_id=parent_id,
+                        metadata=processed_parent_metadata,
+                        embedding=parent_embedding,
+                    )
+                    logger.info(f"📄 Added parent document {parent_id} to ChromaDB")
+                except Exception as e:
+                    logger.error(f"❌ Failed to add parent document {parent_id} to vector store: {e}", exc_info=True)
+                    raise
+
+                # Update BM25 index for the parent
+                await self._update_bm25_index(parent_id, content)
+
+                # Create segment IDs list to store in parent metadata
+                segment_ids = []
+
+                # Process each segment
+                for i, segment in enumerate(segments):
+                    segment_name = segment["metadata"].get(
+                        "subtitle", f"{name} - Segment {i+1}" if name else f"Segment {i+1}"
+                    )
+
+                    # Prepare segment metadata
+                    segment_metadata = {
+                        **extra_metadata,  # Include original metadata
+                        "parent_id": parent_id,
+                        "segment_index": i,
+                        "type": segment["type"],
+                        "task_type": segment["task_type"],
+                        "name": segment_name,
+                    }
+
+                    # Add segment metadata
+                    if segment["metadata"]:
+                        segment_metadata.update(segment["metadata"])
+
+                    # Generate embedding for the segment
+                    segment_embedding = None
+                    if self.llm_controller and segment["task_type"]:
+                        segment_embedding = self.llm_controller.get_embeddings(
+                            segment["content"], task_type=segment["task_type"]
+                        )
+
+                    # Process metadata for storage
+                    processed_segment_metadata = self._process_metadata_for_chroma(segment_metadata)
+
+                    # Store segment in retriever
+                    segment_id = str(uuid.uuid4())
+                    try:
+                        await self.chroma_retriever.add_document(
+                            document=segment["content"],
+                            doc_id=segment_id,
+                            metadata=processed_segment_metadata,
+                            embedding=segment_embedding,
+                        )
+                        logger.info(f"📄 Added segment document {segment_id} to ChromaDB")
+                        segment_ids.append(segment_id)
+                    except Exception as e:
+                        logger.error(
+                            f"❌ Failed to add segment document {segment_id} to vector store: {e}", exc_info=True
+                        )
+                        # Continue with other segments
+
+                    # Update BM25 index for the segment
+                    await self._update_bm25_index(segment_id, segment["content"])
+
+                # Update parent metadata with segment IDs
+                parent_metadata_to_store["segment_ids"] = segment_ids
+                processed_parent_metadata = self._process_metadata_for_chroma(parent_metadata_to_store)
+
+                # Update parent metadata in ChromaDB
+                try:
+                    # Direct update of metadata in ChromaDB
+                    await self.chroma_retriever.update_metadata(parent_id, processed_parent_metadata)
+                    logger.info(f"📝 Updated parent document {parent_id} with segment IDs")
+                except Exception as e:
+                    logger.error(f"❌ Failed to update parent document metadata: {e}", exc_info=True)
+
+                # 5. Create MemoryNote object for parent
+                parent_memory_note = MemoryNote(content=content, id=parent_id, **parent_metadata_to_store)
+
+                # Add to memory cache
+                self.memory_cache[parent_id] = parent_memory_note
+
+                logger.info(f"✅ Parent memory note created with {len(segment_ids)} segments. ID: {parent_id}")
+                return parent_memory_note
+
+        # Create a regular memory note if not using segmentation
+        # 1. Analyze content (use the result from above if LLM analysis was enabled)
+        if not self.enable_llm_analysis:
+            analysis = await self._analyze_content(content)
+
         primary_type = analysis.get("primary_type", "general")
         storage_task_type = analysis.get("storage_task_type")
 
-        # 2. Generate embedding (Remove await - call synchronous method)
-        embedding = self.llm_controller.get_embeddings(content, task_type=storage_task_type)
+        # 2. Generate embedding
+        embedding = None
+        if self.llm_controller:
+            embedding = self.llm_controller.get_embeddings(content, task_type=storage_task_type)
 
         # 3. Prepare metadata
         base_metadata = {
@@ -835,41 +1043,25 @@ class AgenticMemorySystem:
             "updated_at": now,
         }
 
-        # --- PRE-PROCESSING STEP ---
-        # Ensure all metadata values are ChromaDB compatible (str, int, float, bool)
-        # Serialize lists to JSON strings
-        processed_metadata_for_chroma = {}
-        for key, value in metadata_to_store.items():
-            if isinstance(value, list):
-                try:
-                    processed_metadata_for_chroma[key] = json.dumps(value)
-                except TypeError as e:
-                    logger.warning(f"Could not JSON serialize list for key '{key}': {e}. Storing as string.")
-                    processed_metadata_for_chroma[key] = str(value)  # Fallback
-            elif value is None:  # Handle None explicitly if needed (e.g., skip or convert)
-                processed_metadata_for_chroma[key] = ""  # Example: convert None to empty string
-            elif not isinstance(value, (str, int, float, bool)):
-                # Convert other potentially incompatible types
-                processed_metadata_for_chroma[key] = str(value)
-            else:
-                # Value is already compatible
-                processed_metadata_for_chroma[key] = value
-        # -----------------------------
+        # Process metadata for storage
+        processed_metadata = self._process_metadata_for_chroma(metadata_to_store)
 
-        # 4. Store in retriever (This call IS async)
+        # 4. Store in retriever
         note_id = str(uuid.uuid4())
         try:
             await self.chroma_retriever.add_document(
-                document=content, doc_id=note_id, metadata=processed_metadata_for_chroma, embedding=embedding
+                document=content, doc_id=note_id, metadata=processed_metadata, embedding=embedding
             )
             logger.info(f"📄 Added document {note_id} to ChromaDB")
         except ValueError as e:
             # Catch potential re-raised error from retriever
             logger.error(f"❌ Failed to add document {note_id} to vector store: {e}", exc_info=True)
             # Decide if we should still create the in-memory note or raise further
+            raise
         except Exception as e:
             logger.error(f"❌ Unexpected error adding document {note_id} to vector store: {e}", exc_info=True)
             # Decide if we should still create the in-memory note or raise further
+            raise
 
         # 5. Create MemoryNote object
         memory_note = MemoryNote(content=content, id=note_id, **metadata_to_store)
@@ -1012,18 +1204,26 @@ class AgenticMemorySystem:
         return True
 
     async def search(
-        self, query: str, k: int = 5, use_reranker: bool = True, 
-        use_embeddings: bool = True, metadata_filter: Optional[Dict[str, Any]] = None
+        self,
+        query: str,
+        k: int = 5,
+        use_reranker: bool = True,
+        use_embeddings: bool = True,
+        metadata_filter: Optional[Dict[str, Any]] = None,
+        content_type: Optional[str] = None,
+        task_type: Optional[str] = None,
     ) -> List[MemoryNote]:
         """Search for memory notes asynchronously.
-        
+
         Args:
             query: The search query text
             k: Maximum number of results to return
             use_reranker: Whether to use the reranker for better results
-            use_embeddings: Whether to use embeddings for search (set to False if embedding function isn't available)
+            use_embeddings: Whether to use embeddings for search
             metadata_filter: Optional dictionary of metadata fields to filter by
-            
+            content_type: Optional content type to filter results by
+            task_type: Optional embedding task type to use for the query
+
         Returns:
             List of MemoryNote objects matching the query
         """
@@ -1035,20 +1235,47 @@ class AgenticMemorySystem:
         log_params = f"top_k={k}, reranker={'enabled' if use_reranker else 'disabled'}, embeddings={'enabled' if use_embeddings else 'disabled'}"
         if metadata_filter:
             log_params += f", metadata_filter={metadata_filter}"
-            
+
         logger.info(f"🔎 Searching memories for: '{query}' ({log_params})")
 
-        # 1. Analyze query to get optimal task type
-        # TODO: Make content_analyzer.get_optimal_task_type async
-        logger.info("🧠 Analyzing query")
-        query_task_type = self.content_analyzer.get_optimal_task_type(query, is_query=True)
-        logger.info(f"📊 Query analysis: task_type={query_task_type}")
+        # 1. Analyze query to get optimal task type (if task_type not specified and LLM analysis is enabled)
+        query_task_type = task_type
+        if not query_task_type and self.enable_llm_analysis:
+            # Use LLM to analyze the query and determine the optimal task type
+            query_analysis = self.content_analyzer.analyze_content_type(query)
+
+            # Get recommended query task type from analysis
+            query_task_type = query_analysis.get("recommended_task_types", {}).get("query")
+
+            # If content type not specified, determine it from query analysis
+            if not content_type and query_analysis:
+                query_primary_type = query_analysis.get("primary_type")
+
+                # For code-related queries, filter for code content
+                if query_primary_type in ["code", "code_query"]:
+                    content_type = "code"
+                    logger.info(f"Using detected content type filter: {content_type}")
+
+            logger.info(
+                f"📊 Query analysis: task_type={query_task_type}, primary_type={query_analysis.get('primary_type')}"
+            )
+        else:
+            # If not using LLM analysis or task_type already specified, use basic analysis
+            basic_analysis = await self._analyze_content(query)
+            if not query_task_type:
+                query_task_type = basic_analysis.get("storage_task_type")
+
+        # Update metadata filter to include content type if specified
+        if content_type:
+            if not metadata_filter:
+                metadata_filter = {}
+            metadata_filter["type"] = content_type
 
         # 2. Get initial candidates from retrievers
         initial_k = k * 5 if use_reranker and self.reranker else k
         try:
             logger.info(f"🔍 Retrieving initial candidates (top_{initial_k})")
-            
+
             # Generate embedding for the query if using embeddings
             query_embedding = None
             if use_embeddings and self.llm_controller:
@@ -1060,23 +1287,20 @@ class AgenticMemorySystem:
                     logger.error(f"❌ Error generating query embedding: {e}")
                     logger.warning("⚠️ Falling back to text search without embeddings")
                     use_embeddings = False
-            
+
             candidates = []
-            
+
             if use_embeddings:
                 # Try vector search first if embeddings are enabled
                 try:
                     vector_candidates = await self.chroma_retriever.search(
-                        query=query, 
-                        top_k=initial_k,
-                        embedding=query_embedding,
-                        metadata_filter=metadata_filter
+                        query=query, top_k=initial_k, embedding=query_embedding, metadata_filter=metadata_filter
                     )
                     candidates.extend(vector_candidates)
                     logger.debug(f"ChromaDB search found {len(vector_candidates)} results")
                 except Exception as e:
                     logger.error(f"❌ Error in vector search: {str(e)}")
-            
+
             # Always use BM25 search as fallback or additional source
             try:
                 bm25_candidates = await self.bm25_retriever.search(query=query, top_k=initial_k)
@@ -1084,7 +1308,7 @@ class AgenticMemorySystem:
                 logger.debug(f"BM25 search found {len(bm25_candidates)} results")
             except Exception as e:
                 logger.error(f"❌ Error in BM25 search: {str(e)}")
-                
+
             # Deduplicate candidates by ID
             seen_ids = set()
             unique_candidates = []
@@ -1092,10 +1316,10 @@ class AgenticMemorySystem:
                 if candidate["id"] not in seen_ids:
                     seen_ids.add(candidate["id"])
                     unique_candidates.append(candidate)
-                    
+
             candidates = unique_candidates[:initial_k]
             logger.info(f"📋 Initial candidates retrieved: {len(candidates)}")
-            
+
         except Exception as e:
             logger.error(f"❌ Error during search: {str(e)}")
             return []
@@ -1135,19 +1359,37 @@ class AgenticMemorySystem:
             if use_reranker and not self.reranker:
                 logger.warning("⚠️ Reranker requested but not available/initialized")
 
-        # 4. Retrieve full MemoryNote objects from cache for the final IDs
+        # 4. Process results
+        # First, check if we need to handle segments/parents specially
         final_results = []
+        seen_parent_ids = set()
+
         for note_id in final_ids:
             note = self.memory_cache.get(note_id)
-            if note:
-                # Apply additional metadata filtering if specified
-                if metadata_filter and note.metadata:
-                    if all(str(note.metadata.get(key)) == str(value) for key, value in metadata_filter.items()):
-                        final_results.append(note)
-                else:
-                    final_results.append(note)
-            else:
+            if not note:
                 logger.warning(f"⚠️ Note ID {note_id} from search results not found in cache")
+                continue
+
+            # Apply metadata filtering if specified
+            if metadata_filter and note.metadata:
+                # Skip if doesn't match any filter criteria
+                if not all(str(note.metadata.get(key)) == str(value) for key, value in metadata_filter.items()):
+                    continue
+
+            # Check if this is a segment with a parent
+            parent_id = note.metadata.get("parent_id")
+
+            # If this is a segment and we want to include its parent
+            if parent_id and parent_id not in seen_parent_ids:
+                # Get the parent memory
+                parent = self.memory_cache.get(parent_id)
+                if parent:
+                    # Add the parent before the segment
+                    final_results.append(parent)
+                    seen_parent_ids.add(parent_id)
+
+            # Add this result
+            final_results.append(note)
 
         logger.info(f"✅ Search completed. Returning {len(final_results)} results")
         return final_results
@@ -1239,3 +1481,38 @@ class AgenticMemorySystem:
             stop_chroma_server()
         except Exception as e:
             logger.error(f"Error during cleanup: {e}")
+
+    def _process_metadata_for_chroma(self, metadata: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Process metadata to ensure it's compatible with ChromaDB.
+
+        ChromaDB requires metadata values to be strings, numbers, or booleans.
+        This method handles lists and other complex types by serializing them to JSON.
+
+        Args:
+            metadata: Dictionary of metadata to process
+
+        Returns:
+            Dictionary with processed metadata compatible with ChromaDB
+        """
+        processed_metadata = {}
+
+        # Ensure all metadata values are ChromaDB compatible (str, int, float, bool)
+        # Serialize lists to JSON strings
+        for key, value in metadata.items():
+            if isinstance(value, list):
+                try:
+                    processed_metadata[key] = json.dumps(value)
+                except TypeError as e:
+                    logger.warning(f"Could not JSON serialize list for key '{key}': {e}. Storing as string.")
+                    processed_metadata[key] = str(value)  # Fallback
+            elif value is None:  # Handle None explicitly (convert to empty string)
+                processed_metadata[key] = ""
+            elif not isinstance(value, (str, int, float, bool)):
+                # Convert other potentially incompatible types
+                processed_metadata[key] = str(value)
+            else:
+                # Value is already compatible
+                processed_metadata[key] = value
+
+        return processed_metadata

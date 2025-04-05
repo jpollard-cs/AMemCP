@@ -4,10 +4,11 @@ Example script to demonstrate LLM-based content analysis and segmentation.
 Shows how mixed content is intelligently segmented and processed.
 """
 
+import asyncio
+import json
 import logging
 import os
 import sys
-import time
 
 from dotenv import load_dotenv
 
@@ -16,7 +17,6 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # Import memory system and content analyzer
 from amem.core import AgenticMemorySystem
-from amem.core.llm_content_analyzer import LLMContentAnalyzer
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
@@ -96,7 +96,7 @@ How would the time and space complexity change when using generators?
 """
 
 
-def main():
+async def main():
     """Run the example script"""
     # Check if we have an API key
     api_key = os.environ.get("OPENAI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
@@ -107,63 +107,80 @@ def main():
     # Determine which backend to use based on available API keys
     llm_backend = "openai" if os.environ.get("OPENAI_API_KEY") else "gemini"
 
-    # Initialize memory system
-    memory_system = AgenticMemorySystem(project_name="segmentation_example", llm_backend=llm_backend, api_key=api_key)
+    # Initialize memory system with advanced features enabled
+    memory_system = AgenticMemorySystem(
+        project_name="segmentation_example",
+        llm_backend=llm_backend,
+        api_key=api_key,
+        enable_llm_analysis=True,
+        enable_auto_segmentation=True,
+    )
 
-    # Initialize content analyzer
-    content_analyzer = LLMContentAnalyzer(memory_system.llm_controller)
+    # Initialize the memory system
+    await memory_system.initialize()
 
     logger.info(f"Using {llm_backend} backend for content analysis")
 
-    # Analyze the mixed content
-    logger.info("Analyzing mixed content...")
-    analysis = content_analyzer.analyze_content_type(MIXED_CONTENT_SAMPLE)
+    # First, store some simple content to demonstrate content analysis
+    logger.info("\n=== Storing simple contents with auto-analysis ===")
 
-    print("\nContent Analysis:")
-    print(f"Primary type: {analysis['primary_type']}")
-    print(f"Confidence: {analysis['confidence']:.2f}")
-    print(f"Has mixed content: {analysis['has_mixed_content']}")
-    print("\nContent type breakdown:")
-    for content_type, proportion in analysis["types"].items():
-        if proportion > 0:
-            print(f"  - {content_type}: {proportion:.2f}")
+    # Store text content
+    logger.info("Creating text memory...")
+    text_memory = await memory_system.create(
+        "Python is a versatile programming language known for its readability and simplicity.",
+        name="Python Description",
+    )
+    print(f"Created text memory: {text_memory.id}")
+    print(f"Detected content type: {text_memory.metadata.get('type', 'unknown')}")
 
-    print("\nRecommended task types:")
-    print(f"  - For storage: {analysis['recommended_task_types']['storage']}")
-    print(f"  - For queries: {analysis['recommended_task_types']['query']}")
+    # Store code content
+    logger.info("\nCreating code memory...")
+    code_memory = await memory_system.create(
+        """
+def hello_world():
+    print("Hello, world!")
 
-    # Segment the mixed content
-    logger.info("Segmenting mixed content...")
-    segments = content_analyzer.segment_content(MIXED_CONTENT_SAMPLE)
+hello_world()
+        """,
+        name="Hello World Function",
+    )
+    print(f"Created code memory: {code_memory.id}")
+    print(f"Detected content type: {code_memory.metadata.get('type', 'unknown')}")
+    print(f"Storage task type: {code_memory.metadata.get('storage_task_type', 'unknown')}")
 
-    print(f"\nContent was segmented into {len(segments)} parts:")
-    for i, segment in enumerate(segments):
-        print(f"\nSegment {i+1} - {segment['type']} (task type: {segment['task_type']})")
-        if "metadata" in segment and "subtitle" in segment["metadata"] and segment["metadata"]["subtitle"]:
-            print(f"Subtitle: {segment['metadata']['subtitle']}")
-        print(f"Content length: {len(segment['content'])} characters")
-        print(f"First 100 chars: {segment['content'][:100].strip()}")
+    # Store question content
+    logger.info("\nCreating question memory...")
+    question_memory = await memory_system.create(
+        "What is the best way to handle exceptions in Python?", name="Python Exception Question"
+    )
+    print(f"Created question memory: {question_memory.id}")
+    print(f"Detected content type: {question_memory.metadata.get('type', 'unknown')}")
 
-    # Store segments as separate memories
-    logger.info("Storing segments as separate memories...")
-    memory_ids = []
+    # Now demonstrate auto-segmentation with mixed content
+    logger.info("\n=== Storing mixed content with auto-segmentation ===")
 
-    for i, segment in enumerate(segments):
-        # Create a name from metadata if available
-        name = segment["metadata"].get("subtitle", f"Segment {i+1} - {segment['type']}")
+    # Store the complex mixed content
+    mixed_memory = await memory_system.create(MIXED_CONTENT_SAMPLE, name="Fibonacci Guide")
 
-        # Store the segment with its detected task type
-        memory = memory_system.create(
-            segment["content"], name=name, content_type=segment["type"], task_type=segment["task_type"]
-        )
-        memory_ids.append(memory.id)
-        logger.info(f"Created memory: {name}")
+    # Check if segmentation happened
+    if "segment_ids" in mixed_memory.metadata:
+        segment_ids = json.loads(mixed_memory.metadata["segment_ids"])
+        print(f"\nContent was automatically segmented into {len(segment_ids)} parts")
 
-    # Wait for indexing
-    time.sleep(1)
+        # Display information about each segment
+        print("\nSegments created:")
+        for i, segment_id in enumerate(segment_ids):
+            segment = await memory_system.get(segment_id)
+            if segment:
+                print(f"  Segment {i+1}: {segment.metadata.get('name', 'Unnamed')}")
+                print(f"    Type: {segment.metadata.get('type', 'unknown')}")
+                print(f"    Content length: {len(segment.content)} characters")
+                print(f"    First 50 chars: {segment.content[:50].strip()}...")
+    else:
+        print("Content was not segmented (this might indicate an issue)")
 
-    # Try searching with different queries
-    logger.info("\nSearching with different queries...")
+    # Try searching with different queries to demonstrate content-specific optimizations
+    logger.info("\n=== Searching with content-specific optimizations ===")
 
     queries = [
         "How do I implement a Fibonacci sequence?",
@@ -174,22 +191,33 @@ def main():
 
     for query in queries:
         logger.info(f"Searching for: {query}")
-        # Get optimal task type for this query
-        task_type = content_analyzer.get_optimal_task_type(query, is_query=True)
-        logger.info(f"Using task type: {task_type}")
 
-        # Search with the optimal task type
-        results = memory_system.search(query, k=3)
+        # Search with LLM analysis enabled (will auto-detect query type and best task type)
+        results = await memory_system.search(query=query, k=2, use_reranker=True)
 
         print(f"\nResults for query: '{query}'")
         for i, memory in enumerate(results):
-            print(f"{i+1}. {memory.metadata.get('name', 'Unnamed')} - {memory.content[:50]}...")
+            print(f"{i+1}. {memory.metadata.get('name', 'Unnamed')}")
+            if len(memory.content) > 100:
+                print(f"   {memory.content[:100].strip()}...")
+            else:
+                print(f"   {memory.content.strip()}")
 
     # Clean up
-    for memory_id in memory_ids:
-        memory_system.delete(memory_id)
+    logger.info("\n=== Cleaning up ===")
+    await memory_system.delete(text_memory.id)
+    await memory_system.delete(code_memory.id)
+    await memory_system.delete(question_memory.id)
+    await memory_system.delete(mixed_memory.id)
+
+    # Clean up segments
+    if "segment_ids" in mixed_memory.metadata:
+        segment_ids = json.loads(mixed_memory.metadata["segment_ids"])
+        for segment_id in segment_ids:
+            await memory_system.delete(segment_id)
+
     logger.info("\nExample completed successfully!")
 
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())
