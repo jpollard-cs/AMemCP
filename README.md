@@ -7,6 +7,7 @@ An agentic memory system that provides persistent storage and semantic search ca
 - **ChromaDB 1.0.0 Support**: Updated to use the latest ChromaDB with improved performance and stability
 - **Async HTTP Client**: Using the dedicated ChromaDB client package for HTTP connections
 - **Colorful Logging**: Enhanced logging with colorful output and emojis for better readability
+- **TypeScript Client**: Added a TypeScript client for connecting to the MCP server
 
 ## Project Structure
 
@@ -16,6 +17,13 @@ An agentic memory system that provides persistent storage and semantic search ca
 - `mcp_sse_client.py` - SSE client for connecting to the MCP server
 - `mcp_sse_server.py` - SSE server implementation
 - `sse_helper.py` - Helper utilities for SSE communication
+- `amem/server/mcp_fastmcp_server.py` - Main FastMCP server implementation
+- `amem/core/memory_system.py` - Core memory system with async retrieval capabilities
+- `amem/utils/utils.py` - Shared utilities for logging and constants
+- `amem/mcp_client.py` - Python client for connecting to the MCP server
+- `client/` - TypeScript client implementation for connecting to the MCP server
+- `examples/`: Example scripts demonstrating various AMemCP features (see [Examples README](examples/README.md))
+- `tests/`: Test suite for AMemCP server and client
 
 ## Shared Utilities
 
@@ -412,3 +420,29 @@ See [Supergateway documentation](https://github.com/supercorp-ai/supergateway) f
 - Custom endpoint paths
 - Authentication headers
 - Health endpoints
+
+## TypeScript Client
+
+The project includes a TypeScript client for connecting to the AMemCP server. The client uses the Model Context Protocol (MCP) SDK to communicate with the server.
+
+### Client Features
+
+- Connect to the AMemCP server using SSE transport
+- Create, retrieve, and search memories
+- List available tools on the server
+- Built with TypeScript for type safety
+
+### Running the TypeScript Client
+
+```bash
+# Navigate to the client directory
+cd client
+
+# Install dependencies
+npm install
+
+# Build and run the client
+npm run dev
+```
+
+For more details, see the [client README](./client/README.md).

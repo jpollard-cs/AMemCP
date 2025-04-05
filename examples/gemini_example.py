@@ -14,7 +14,7 @@ import dotenv
 sys.path.append(str(Path(__file__).parent.parent))
 
 # Import A-Mem modules
-from memory_system import AgenticMemorySystem
+from amem.core import AgenticMemorySystem
 
 # Load environment variables
 dotenv.load_dotenv()

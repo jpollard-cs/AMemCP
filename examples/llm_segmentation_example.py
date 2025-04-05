@@ -14,10 +14,9 @@ from dotenv import load_dotenv
 # Add parent directory to path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from llm_content_analyzer import LLMContentAnalyzer
-
 # Import memory system and content analyzer
-from memory_system import AgenticMemorySystem
+from amem.core import AgenticMemorySystem
+from amem.core.llm_content_analyzer import LLMContentAnalyzer
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
