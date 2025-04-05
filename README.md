@@ -113,7 +113,7 @@ pip install -r requirements.txt
 from memory_system import AgenticMemorySystem
 
 # Initialize the memory system
-memory_system = AgenticMemorySystem(
+memory_system = await AgenticMemorySystem(
     # Optional configuration parameters
     project_name="my_project",
     llm_backend="openai",  # or "gemini", "ollama", "mock"
@@ -129,7 +129,7 @@ print(f"Created note with ID: {note.id}")
 
 ```python
 # Retrieve a memory by ID
-note = memory_system.read("note_id_here")
+note = await memory_system.read("note_id_here")
 if note:
     print(f"Content: {note.content}")
     print(f"Keywords: {note.metadata.get('keywords', [])}")
@@ -140,7 +140,7 @@ if note:
 
 ```python
 # Update a memory's content
-updated_note = memory_system.update("note_id_here", "Updated content here")
+updated_note = awaitmemory_system.update("note_id_here", "Updated content here")
 print(f"Updated note: {updated_note.content}")
 ```
 
@@ -148,7 +148,7 @@ print(f"Updated note: {updated_note.content}")
 
 ```python
 # Delete a memory
-success = memory_system.delete("note_id_here")
+success = await memory_system.delete("note_id_here")
 print(f"Deletion successful: {success}")
 ```
 
@@ -156,12 +156,12 @@ print(f"Deletion successful: {success}")
 
 ```python
 # Basic semantic search
-results = memory_system.search("San Francisco landmarks", top_k=5)
+results = awaitmemory_system.search("San Francisco landmarks", top_k=5)
 for note in results:
     print(f"ID: {note.id}, Content: {note.content}")
 
 # Hybrid search (combining semantic and keyword search)
-results = memory_system.search(
+results = await memory_system.search(
     "San Francisco landmarks",
     top_k=5,
     keywords=["bridge", "tourist"]
