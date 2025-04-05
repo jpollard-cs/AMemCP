@@ -1,4 +1,4 @@
-# AMemCP - Agentic Memory System with Model Context Protocol built on top fo AMem
+# AMemCP - Agentic Memory System with Model Context Protocol built on top of AMem
 
 An agentic memory system that provides persistent storage and semantic search capabilities for AI agents, with connections via the Model Context Protocol (MCP).
 
