@@ -30,7 +30,7 @@ A-Mem employs a flexible framework to organize memories:
 - **ChromaDB 1.0.0 Support**: Updated to use the latest ChromaDB with improved performance and stability
 - **Async HTTP Client**: Using the dedicated ChromaDB client package for HTTP connections
 - **Colorful Logging**: Enhanced logging with colorful output and emojis for better readability
-- **TypeScript Client**: Added a TypeScript client for connecting to the MCP server
+- **TypeScript Client**: Added a TypeScript client for testing the MCP server
 
 ## Project Structure
 
