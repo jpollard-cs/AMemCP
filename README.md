@@ -1,6 +1,27 @@
-# AMemCP - Agentic Memory System with Model Context Protocol
+# AMemCP - Agentic Memory System with Model Context Protocol built on top fo AMem
 
 An agentic memory system that provides persistent storage and semantic search capabilities for AI agents, with connections via the Model Context Protocol (MCP).
+
+## A-Mem: Agentic Memory System
+
+A-Mem is a novel agentic memory system for Language Model (LLM) agents that dynamically organizes memories based on semantic structure, relationships, and agent-specific considerations, optimizing for effective retrieval and informed decision-making.
+
+## Key Features
+
+- **Dynamic Memory Organization**: Memories are stored with rich metadata and organized dynamically rather than in static structures
+- **Intelligent Indexing**: Utilizes hybrid retrieval with vector embedding similarity and BM25 lexical search
+- **Comprehensive Note Generation**: Automatically extracts keywords, summaries, and context
+- **Interconnected Knowledge Network**: Creates links between related memories
+- **Continuous Memory Evolution**: Updates memory metadata when new related information is encountered
+
+## Framework
+
+A-Mem employs a flexible framework to organize memories:
+
+1. **Memory Notes**: Atomic units with content and metadata
+2. **Metadata Structure**: Includes keywords, context, type, timestamps, related notes, sentiment, and importance
+3. **Hybrid Search**: Combines semantic and keyword-based search
+4. **Memory Evolution**: Updates metadata as related information is encountered
 
 ## Latest Updates
 
@@ -11,11 +32,6 @@ An agentic memory system that provides persistent storage and semantic search ca
 
 ## Project Structure
 
-- `mcp_fastmcp_server.py` - Main FastMCP server implementation
-- `memory_system.py` - Core memory system with async retrieval capabilities
-- `utils.py` - Shared utilities for logging and constants
-- `mcp_sse_client.py` - SSE client for connecting to the MCP server
-- `mcp_sse_server.py` - SSE server implementation
 - `sse_helper.py` - Helper utilities for SSE communication
 - `amem/server/mcp_fastmcp_server.py` - Main FastMCP server implementation
 - `amem/core/memory_system.py` - Core memory system with async retrieval capabilities
@@ -65,39 +81,7 @@ The application can be configured using the following environment variables:
 - `GOOGLE_API_KEY` - Google API key for Gemini models
 - `OPENAI_API_KEY` - OpenAI API key for OpenAI models
 - `PERSIST_DIRECTORY` - Directory to persist data
-- `JINA_RERANKER_MODEL` - Jina reranker model name
-- `JINA_API_KEY` - Jina API key
-
-## Running the Server
-
-```bash
-# Start the server
-python mcp_sse_server.py --verbose
-
-# In another terminal, connect a client
-python mcp_sse_client.py --use-patched-client --verbose
-```
-
-## A-Mem: Agentic Memory System
-
-A-Mem is a novel agentic memory system for Language Model (LLM) agents that dynamically organizes memories based on semantic structure, relationships, and agent-specific considerations, optimizing for effective retrieval and informed decision-making.
-
-## Key Features
-
-- **Dynamic Memory Organization**: Memories are stored with rich metadata and organized dynamically rather than in static structures
-- **Intelligent Indexing**: Utilizes hybrid retrieval with vector embedding similarity and BM25 lexical search
-- **Comprehensive Note Generation**: Automatically extracts keywords, summaries, and context
-- **Interconnected Knowledge Network**: Creates links between related memories
-- **Continuous Memory Evolution**: Updates memory metadata when new related information is encountered
-
-## Framework
-
-A-Mem employs a flexible framework to organize memories:
-
-1. **Memory Notes**: Atomic units with content and metadata
-2. **Metadata Structure**: Includes keywords, context, type, timestamps, related notes, sentiment, and importance
-3. **Hybrid Search**: Combines semantic and keyword-based search
-4. **Memory Evolution**: Updates metadata as related information is encountered
+- `RERANKER_MODEL` - reranker model name
 
 ## Installation
 
