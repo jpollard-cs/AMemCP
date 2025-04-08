@@ -33,7 +33,7 @@ websockets>=15.0.1
 httpx>=0.28.1
 
 # ASGI Framework (for mounting sse_app)
-starlette>=0.40.0,<0.46.0
+starlette>=0.40.0,<0.47.0
 sse-starlette>=2.2.1
 
 colorlog>=6.9.0
