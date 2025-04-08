@@ -176,7 +176,6 @@ A-Mem supports specialized embedding task types with the Gemini API, which impro
 
 - `RETRIEVAL_DOCUMENT`: Optimized for embedding documents to be retrieved later
 - `RETRIEVAL_QUERY`: Optimized for embedding queries to search for documents
-- `CODE_RETRIEVAL_DOCUMENT`: Optimized for embedding code snippets
 - `CODE_RETRIEVAL_QUERY`: Optimized for embedding queries to search for code
 - `QUESTION_ANSWERING`: Optimized for Q&A applications
 

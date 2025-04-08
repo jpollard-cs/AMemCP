@@ -66,9 +66,7 @@ class LLMController(BaseLLMController):
         except Exception as e:
             logger.error(f"Error getting completion from provider: {e}")
             # Return empty JSON if response format is JSON
-            if response_format and response_format.get("type") == "json_schema":
-                return "{}"
-            return ""
+            raise
 
     def get_embeddings(self, text: str, task_type: Optional[str] = None) -> List[float]:
         """Get embeddings from the provider
@@ -85,10 +83,7 @@ class LLMController(BaseLLMController):
             return embeddings
         except Exception as e:
             logger.error(f"Error getting embeddings from provider: {e}")
-            # Return mock embeddings on error
-            import numpy as np
-
-            return list(np.random.rand(384))
+            raise
 
 
 # Legacy controller classes maintained for backward compatibility

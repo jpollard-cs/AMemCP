@@ -62,12 +62,14 @@ def main() -> None:
         logger.info(f"Project: {os.environ.get('PROJECT_NAME')}")
         logger.info(f"Data directory: {os.environ.get('PERSIST_DIRECTORY')}")
 
+        # Disable uvicorn's default logging since we've already set up our own
         uvicorn.run(
             "amem.server:fastmcp_app",
             host=host,
             port=port,
             reload=reload,
             log_level=log_level,
+            log_config=None,  # Disable uvicorn's default logging configuration
         )
     except KeyboardInterrupt:
         print("Server shutdown requested. Exiting...")

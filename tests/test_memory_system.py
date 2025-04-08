@@ -40,7 +40,7 @@ class TestDetectContentType(unittest.TestCase):
 
         content_type, doc_task, query_task = detect_content_type(code_sample)
         self.assertEqual(content_type, "code")
-        self.assertEqual(doc_task, "CODE_RETRIEVAL_DOCUMENT")
+        self.assertEqual(doc_task, "RETRIEVAL_DOCUMENT")
         self.assertEqual(query_task, "CODE_RETRIEVAL_QUERY")
 
     def test_detect_question(self):
@@ -69,7 +69,7 @@ class TestDetectContentType(unittest.TestCase):
         # We no longer care about the specific values, just that it returns valid values
         # This makes the test more robust against implementation changes
         self.assertIn(content_type, ["general", "code", "question"])
-        self.assertIn(doc_task, ["RETRIEVAL_DOCUMENT", "CODE_RETRIEVAL_DOCUMENT", "QUESTION_ANSWERING"])
+        self.assertIn(doc_task, ["RETRIEVAL_DOCUMENT", "QUESTION_ANSWERING"])
         self.assertIn(query_task, ["RETRIEVAL_QUERY", "CODE_RETRIEVAL_QUERY"])
 
         # Log the actual values for debugging

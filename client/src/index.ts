@@ -6,6 +6,8 @@ import { Client } from "../node_modules/@modelcontextprotocol/sdk/dist/esm/clien
 import { SSEClientTransport } from "../node_modules/@modelcontextprotocol/sdk/dist/esm/client/sse.js";
 // Add explicit type import for Tool
 import { type Tool } from "../node_modules/@modelcontextprotocol/sdk/dist/esm/types.js";
+// Import chalk for colorful logging
+import chalk from 'chalk';
 
 // Configuration
 // We need to use the SSE endpoint which is at /sse
@@ -84,9 +86,48 @@ Merge sort has a consistent O(n log n) time complexity for all cases.
 3. What are the implications for parallel processing?
 `;
 
+// Helper functions for functional approaches
+const parseJsonSafely = <T>(text: string, defaultValue: T): T => {
+  try {
+    return JSON.parse(text) as T;
+  } catch (error) {
+    console.error(chalk.red("Error parsing JSON:"), error);
+    return defaultValue;
+  }
+};
+
+const extractTextContent = (result: any): string | null => {
+  return result?.content?.[0]?.text || null;
+};
+
+// Logger with colors for better readability
+const logger = {
+  info: (message: string, ...args: any[]) => console.log(chalk.blue(`ℹ️  ${message}`), ...args),
+  success: (message: string, ...args: any[]) => console.log(chalk.green(`✅  ${message}`), ...args),
+  warn: (message: string, ...args: any[]) => console.log(chalk.yellow(`⚠️  ${message}`), ...args),
+  error: (message: string, ...args: any[]) => console.error(chalk.red(`❌  ${message}`), ...args),
+  highlight: (message: string, ...args: any[]) => console.log(chalk.cyan(`🔦  ${message}`), ...args),
+  title: (message: string) => console.log(chalk.bold.magenta(`\n=== 🏷️ ${message} ===\n`)),
+  result: (message: string, ...args: any[]) => console.log(chalk.green(`✉️  `), chalk.bold(message), ...args),
+  code: (message: string) => console.log(chalk.gray(`  ${message}`)),
+
+  // Add specialized contextual loggers
+  memory: {
+    create: (message: string, ...args: any[]) => console.log(chalk.blue(`🧠 📝  ${message}`), ...args),
+    get: (message: string, ...args: any[]) => console.log(chalk.green(`🧠 🗂️  ${message}`), ...args),
+    delete: (message: string, ...args: any[]) => console.log(chalk.blueBright(`🧠 🗑️  ${message}`), ...args),
+    search: (message: string, ...args: any[]) => console.log(chalk.green(`🧠 🔍  ${message}`), ...args)
+  },
+  connection: {
+    start: (message: string, ...args: any[]) => console.log(chalk.blue(`⚡️  ${message}`), ...args),
+    success: (message: string, ...args: any[]) => console.log(chalk.green(`🔌 🟢  ${message}`), ...args),
+    close: (message: string, ...args: any[]) => console.log(chalk.blueBright(`🔌 ✂️ 🔴  ${message}`), ...args),
+  }
+};
+
 async function main(): Promise<void> {
-  console.log("Starting AMemCP TypeScript Client...");
-  console.log(`Connecting to MCP server at: ${SERVER_URL}`);
+  logger.title("Starting AMemCP TypeScript Client");
+  logger.connection.start(`Connecting to MCP server at: ${chalk.cyan(SERVER_URL)}`);
 
   try {
     // Create SSE transport to connect to the server
@@ -100,7 +141,7 @@ async function main(): Promise<void> {
       }
     );
 
-    console.log("Transport initialized. Creating client...");
+    logger.info("Transport initialized. Creating client...");
 
     // Create client with capabilities needed
     const client = new Client(
@@ -117,42 +158,42 @@ async function main(): Promise<void> {
       }
     );
 
-    console.log("Client created. Connecting to server...");
+    logger.info("Client created. Connecting to server...");
 
     // Connect to the server
     await client.connect(transport);
-    console.log("Connected to server!");
+    logger.connection.success("Connected to server!");
 
     // List available tools
-    console.log("Listing available tools...");
+    logger.info("Listing available tools...");
     const { tools = [] } = await client.listTools();
-    console.log(`Found ${tools ? tools.length : 0} tools:`);
+    logger.highlight(`Found ${tools ? tools.length : 0} tools:`);
 
     // Check if tools is an array before iterating
     if (tools && Array.isArray(tools)) {
       tools.forEach((tool: any) => {
-        console.log(`- ${tool.name}: ${tool.description}`);
+        logger.result(`${tool.name}: ${tool.description}`);
       });
 
       // Test basic memory operations
       await testMemoryOperations(client);
 
       // Test new LLM analysis features
-      console.log("\n=== Testing LLM Content Analysis and Auto-Segmentation Features ===\n");
+      logger.title("Testing LLM Content Analysis and Auto-Segmentation Features");
       await testLLMContentAnalysis(client);
       await testAutoSegmentation(client);
       await testContentSpecificSearch(client);
     } else {
-      console.log("No tools found or tools is not an array");
+      logger.warn("No tools found or tools is not an array");
     }
 
     // Clean up - Note: There is no disconnect method; the connection will close
     // when the transport is closed
-    console.log("Closing transport...");
+    logger.connection.close("Closing transport...");
     await transport.close();
-    console.log("Transport closed.");
+    logger.success("Transport closed.");
   } catch (error: unknown) {
-    console.error("Error:", error);
+    logger.error("Error:", error);
   }
 }
 
@@ -160,120 +201,140 @@ async function main(): Promise<void> {
  * Test memory operations using the client's tools
  */
 async function testMemoryOperations(client: Client): Promise<void> {
-  console.log("\n--- Testing Memory Operations ---\n");
+  logger.title("Testing Memory Operations");
 
   try {
     // 1. Create a memory
-    console.log("Creating a test memory...");
-    const memory = await createMemory(
+    logger.memory.create("Creating a test memory...");
+    const memory = await createMemory({
       client,
-      "This is a test memory created from the TypeScript client.",
-      "Test Memory",
-      { tags: ["test", "typescript"], source: "client-test" }
-    );
+      content: "This is a test memory created from the TypeScript client.",
+      name: "Test Memory",
+      metadata: { tags: ["test", "typescript"], source: "client-test" }
+    });
 
-    console.log("Memory created:", memory);
+    logger.info("Memory created:", memory);
 
-    if (!memory || !memory.id) {
-      console.error("Failed to create memory with a valid ID");
+    if (!memory?.id) {
+      logger.error("Failed to create memory with a valid ID");
       return;
     }
 
-    console.log(`Successfully created memory with ID: ${memory.id}`);
+    const { id } = memory;
+    logger.success(`Successfully created memory with ID: ${id}`);
 
     // 2. Retrieve the memory
-    console.log("\nRetrieving memory...");
-    const retrievedMemory = await getMemory(client, memory.id);
-    console.log("Retrieved memory:", retrievedMemory);
+    logger.memory.get("Retrieving memory...");
+    const retrievedMemory = await getMemory({
+      client,
+      memoryId: id
+    });
+    logger.result("Retrieved memory:", retrievedMemory);
 
     // 3. Search for memories
-    console.log("\nSearching for memories with 'test'...");
+    logger.memory.search("Searching for memories with 'test'...");
     try {
-      const searchResults = await searchMemories(client, "test");
-      console.log(`Found ${searchResults.memories?.length || 0} memories:`);
+      const searchResults = await searchMemories({
+        client,
+        query: "test"
+      });
+      const { memories = [] } = searchResults;
+      logger.highlight(`Found ${memories?.length || 0} memories:`);
 
-      if (searchResults.memories && searchResults.memories.length > 0) {
-        searchResults.memories.forEach((mem: Memory, index: number) => {
-          console.log(`${index + 1}. ${mem.name || 'Unnamed'}: ${mem.content.substring(0, 50)}...`);
-        });
+      if (memories?.length > 0) {
+        // Functional approach using map and forEach
+        memories
+          .map((mem, index) => {
+            const { name = 'Unnamed', content } = mem;
+            return `${index + 1}. ${chalk.bold(name)}: ${chalk.gray(content.substring(0, 50))}...`;
+          })
+          .forEach(formattedMemory => console.log(`  ${formattedMemory}`));
       } else {
-        console.log("No memories found matching the query");
+        logger.warn("No memories found matching the query");
       }
     } catch (error) {
-      console.error("Search failed:", error);
+      logger.error("Search failed:", error);
     }
 
     // 4. Get all memories
-    console.log("\nGetting all memories...");
+    logger.memory.get("Getting all memories...");
     try {
       const allResult = await client.callTool({
         name: "get_all_memories",
         arguments: {}
       });
 
-      console.log("Raw all memories result:", allResult);
+      logger.info("Raw all memories result:", allResult);
 
-      if (allResult.content && Array.isArray(allResult.content) && allResult.content.length > 0) {
-        const allMemories = JSON.parse(allResult.content[0].text);
-        console.log(`Total memories: ${allMemories.count || 0}`);
+      const textContent = extractTextContent(allResult);
+      if (textContent) {
+        const allMemories = parseJsonSafely(textContent, { count: 0, memories: [] });
+        const { count = 0, memories = [] } = allMemories;
+        logger.highlight(`Total memories: ${count}`);
 
-        if (allMemories.memories && allMemories.memories.length > 0) {
-          allMemories.memories.forEach((mem: Memory, index: number) => {
-            // Check for name in metadata or fall back to 'Unnamed'
-            const memName = mem.metadata && mem.metadata.name ? mem.metadata.name : 'Unnamed';
-            console.log(`${index + 1}. ${memName}: ${mem.id}`);
-          });
+        if (memories.length > 0) {
+          // Functional approach using map and forEach
+          memories
+            .map((mem, index) => {
+              const { metadata = {}, id } = mem;
+              // Fix for the type error by asserting the type of metadata
+              const memName = (metadata as Record<string, any>)['name'] || 'Unnamed';
+              return `${index + 1}. ${chalk.bold(memName)}: ${chalk.cyan(id)}`;
+            })
+            .forEach(formattedMemory => console.log(`  ${formattedMemory}`));
         }
       }
     } catch (error) {
-      console.error("Get all memories failed:", error);
+      logger.error("Get all memories failed:", error);
     }
 
   } catch (error) {
-    console.error("Error during memory operations:", error);
+    logger.error("Error during memory operations:", error);
   }
 }
 
 /**
  * Create a memory using the create_memory tool
+ *
+ * why this anonymous object pattern?
+ * looser coupling and flexibility of parameter ordering -
+ * definings interfaces based on actual usage rather than upfront design
  */
-async function createMemory(
+async function createMemory({
+  client,
+  content,
+  name,
+  metadata
+}: {
   client: Client,
   content: string,
   name?: string,
   metadata?: Record<string, any>
-): Promise<Memory> {
+}): Promise<Memory> {
   // Log the parameters we're sending for debugging
-  console.log("Creating memory with params:", { content, name, metadata });
+  logger.memory.create(`Creating memory "${name || 'Unnamed'}" with content length: ${content.length} chars`);
 
   try {
+    // Build arguments object immutably
+    const args = {
+      content,
+      ...(name && { name }),
+      ...(metadata && { metadata })
+    };
+
     const result = await client.callTool({
       name: "create_memory",
-      arguments: {
-        content,
-        ...(name ? { name } : {}),
-        ...(metadata ? { metadata } : {})
-      }
+      arguments: args
     });
 
-    console.log("Raw result:", result);
+    logger.info("Raw result:", result);
 
-    // Try to extract the result from wherever it is in the response
-    if (result.content && Array.isArray(result.content) && result.content.length > 0) {
-      if (result.content[0].text) {
-        // The text field contains a JSON string that needs to be parsed
-        try {
-          return JSON.parse(result.content[0].text) as Memory;
-        } catch (parseError) {
-          console.error("Error parsing JSON response:", parseError);
-          return result.content[0].text as unknown as Memory;
-        }
-      }
-    }
-
-    return result as unknown as Memory;
+    const textContent = extractTextContent(result);
+    return textContent
+      ? parseJsonSafely(textContent, result as unknown as Memory)
+      : result as unknown as Memory;
   } catch (error) {
-    console.error("Error creating memory:", error);
+    logger.error("Error creating memory:", error);
     throw error;
   }
 }
@@ -281,8 +342,14 @@ async function createMemory(
 /**
  * Get a memory by ID using the get_memory tool
  */
-async function getMemory(client: Client, memoryId: string): Promise<Memory> {
-  console.log("Getting memory with ID:", memoryId);
+async function getMemory({
+  client,
+  memoryId
+}: {
+  client: Client,
+  memoryId: string
+}): Promise<Memory> {
+  logger.memory.get(`Getting memory with ID: ${memoryId}`);
 
   try {
     const result = await client.callTool({
@@ -292,105 +359,89 @@ async function getMemory(client: Client, memoryId: string): Promise<Memory> {
       }
     });
 
-    console.log("Raw get result:", result);
+    logger.info("Raw get result:", result);
 
-    // Extract the memory from the response
-    if (result.content && Array.isArray(result.content) && result.content.length > 0) {
-      if (result.content[0].text) {
-        // The text field contains a JSON string that needs to be parsed
-        try {
-          return JSON.parse(result.content[0].text) as Memory;
-        } catch (parseError) {
-          console.error("Error parsing JSON response:", parseError);
-          return result.content[0].text as unknown as Memory;
-        }
-      }
-    }
-
-    return result as unknown as Memory;
+    const textContent = extractTextContent(result);
+    return textContent
+      ? parseJsonSafely(textContent, result as unknown as Memory)
+      : result as unknown as Memory;
   } catch (error) {
-    console.error("Error getting memory:", error);
+    logger.error("Error getting memory:", error);
     throw error;
   }
-}
-
-/**
- * Search for memories using the search_memories tool
- */
-async function searchMemories(
-  client: Client,
-  query: string,
-  metadataFilter?: Record<string, any>,
-  topK: number = 5
-): Promise<SearchResult> {
-  return searchMemoriesWithFilter(client, query, metadataFilter, topK);
 }
 
 /**
  * Test LLM content analysis feature
  */
 async function testLLMContentAnalysis(client: Client): Promise<void> {
-  console.log("\n--- Testing LLM Content Analysis ---\n");
+  logger.title("Testing LLM Content Analysis");
 
   const createdIds: string[] = [];
 
   try {
     // Test text content
-    console.log("Creating text memory with LLM analysis...");
-    const textMemory = await createMemory(
+    logger.info("Creating text memory with LLM analysis...");
+    const textMemory = await createMemory({
       client,
-      "Neural networks are computational systems inspired by the biological neural networks in human brains.",
-      "Neural Networks Description",
-      { enable_llm_analysis: true }
-    );
+      content: "Neural networks are computational systems inspired by the biological neural networks in human brains.",
+      name: "Neural Networks Description",
+      metadata: { enable_llm_analysis: true }
+    });
 
-    if (textMemory && textMemory.id) {
+    if (textMemory?.id) {
       createdIds.push(textMemory.id);
-      console.log("Text memory created:", textMemory);
-      console.log("Content type:", textMemory.metadata?.type || "Type not detected");
+      const { metadata = {} } = textMemory;
+      logger.info("Text memory created:", textMemory);
+      logger.info("Content type:", metadata.type || "Type not detected");
     }
 
     // Test code content
-    console.log("\nCreating code memory with LLM analysis...");
-    const codeMemory = await createMemory(
+    logger.info("\nCreating code memory with LLM analysis...");
+    const codeMemory = await createMemory({
       client,
-      "def hello_world():\n    print('Hello, world!')\n\nhello_world()",
-      "Hello World Function",
-      { enable_llm_analysis: true }
-    );
+      content: "def hello_world():\n    print('Hello, world!')\n\nhello_world()",
+      name: "Hello World Function",
+      metadata: { enable_llm_analysis: true }
+    });
 
-    if (codeMemory && codeMemory.id) {
+    if (codeMemory?.id) {
       createdIds.push(codeMemory.id);
-      console.log("Code memory created:", codeMemory);
-      console.log("Content type:", codeMemory.metadata?.type || "Type not detected");
-      console.log("Storage task type:", codeMemory.metadata?.storage_task_type || "Task type not detected");
+      const { metadata = {} } = codeMemory;
+      logger.info("Code memory created:", codeMemory);
+      logger.info("Content type:", metadata.type || "Type not detected");
+      logger.info("Storage task type:", metadata.storage_task_type || "Task type not detected");
     }
 
     // Test question content
-    console.log("\nCreating question memory with LLM analysis...");
-    const questionMemory = await createMemory(
+    logger.info("\nCreating question memory with LLM analysis...");
+    const questionMemory = await createMemory({
       client,
-      "What are the best practices for implementing a neural network from scratch?",
-      "Neural Network Question",
-      { enable_llm_analysis: true }
-    );
+      content: "What are the best practices for implementing a neural network from scratch?",
+      name: "Neural Network Question",
+      metadata: { enable_llm_analysis: true }
+    });
 
-    if (questionMemory && questionMemory.id) {
+    if (questionMemory?.id) {
       createdIds.push(questionMemory.id);
-      console.log("Question memory created:", questionMemory);
-      console.log("Content type:", questionMemory.metadata?.type || "Type not detected");
+      const { metadata = {} } = questionMemory;
+      logger.info("Question memory created:", questionMemory);
+      logger.info("Content type:", metadata.type || "Type not detected");
     }
   } catch (error) {
-    console.error("Error during LLM content analysis testing:", error);
+    logger.error("Error during LLM content analysis testing:", error);
   } finally {
     // Clean up - delete all created memories
-    console.log("\nCleaning up created memories...");
+    logger.info("\nCleaning up created memories...");
     for (const id of createdIds) {
       try {
-        await deleteMemory(client, id);
-        console.log(`Deleted memory ${id}`);
+        await deleteMemory({
+          client,
+          memoryId: id
+        });
+        logger.memory.delete(`Deleted memory ${id}`);
       } catch (error) {
-        console.error(`Error deleting memory ${id}:`, error);
+        logger.error(`Error deleting memory ${id}:`, error);
       }
     }
   }
@@ -400,105 +451,120 @@ async function testLLMContentAnalysis(client: Client): Promise<void> {
  * Test auto-segmentation of mixed content
  */
 async function testAutoSegmentation(client: Client): Promise<void> {
-  console.log("\n--- Testing Auto-Segmentation ---\n");
+  logger.title("Testing Auto-Segmentation");
 
   let parentId: string | null = null;
   const segmentIds: string[] = [];
 
   try {
     // Create memory with mixed content and enable auto-segmentation
-    console.log("Creating mixed content memory with auto-segmentation...");
-    const mixedMemory = await createMemory(
+    logger.info("Creating mixed content memory with auto-segmentation...");
+    const mixedMemory = await createMemory({
       client,
-      MIXED_CONTENT_SAMPLE,
-      "Sorting Algorithms Guide",
-      {
+      content: MIXED_CONTENT_SAMPLE,
+      name: "Sorting Algorithms Guide",
+      metadata: {
         enable_llm_analysis: true,
         enable_auto_segmentation: true
       }
-    );
+    });
 
-    if (!mixedMemory || !mixedMemory.id) {
-      console.error("Failed to create mixed content memory");
+    if (!mixedMemory?.id) {
+      logger.error("Failed to create mixed content memory");
       return;
     }
 
     parentId = mixedMemory.id;
-    console.log("Mixed content memory created:", mixedMemory);
+    logger.info("Mixed content memory created:", mixedMemory);
 
     // Check if auto-segmentation occurred
-    if (mixedMemory.metadata && mixedMemory.metadata.segment_ids) {
-      let segments: string[] = [];
+    if (mixedMemory.metadata?.segment_ids) {
+      const { metadata } = mixedMemory;
 
-      if (typeof mixedMemory.metadata.segment_ids === 'string') {
-        // Parse JSON string if needed
-        try {
-          segments = JSON.parse(mixedMemory.metadata.segment_ids);
-        } catch (error) {
-          console.error("Error parsing segment_ids:", error);
-        }
-      } else if (Array.isArray(mixedMemory.metadata.segment_ids)) {
-        segments = mixedMemory.metadata.segment_ids;
-      }
+      // Extract segment IDs, handling both string and array formats
+      const segments: string[] = typeof metadata.segment_ids === 'string'
+        ? parseJsonSafely(metadata.segment_ids, [])
+        : Array.isArray(metadata.segment_ids) ? metadata.segment_ids : [];
 
-      console.log(`Content was segmented into ${segments.length} parts`);
+      logger.highlight(`Content was segmented into ${segments.length} parts`);
       segmentIds.push(...segments);
 
-      // Retrieve each segment to verify content
-      for (let i = 0; i < segments.length; i++) {
-        const segmentId = segments[i];
+      // Use Promise.all to process segments in parallel
+      const segmentPromises = segments.map(async (segmentId, index) => {
         try {
-          const segment = await getMemory(client, segmentId);
-          console.log(`\nSegment ${i+1}:`);
-          console.log(`  Type: ${segment.metadata?.type || "unknown"}`);
-          console.log(`  Name: ${segment.metadata?.name || "Unnamed"}`);
-          console.log(`  Content preview: ${segment.content.substring(0, 100)}...`);
+          const segment = await getMemory({
+            client,
+            memoryId: segmentId
+          });
+          const { metadata, content } = segment;
 
-          // Verify segment has parent relationship
-          if (segment.metadata?.parent_id === parentId) {
-            console.log(`  Connected to parent: ✓`);
-          } else {
-            console.log(`  WARNING: Segment missing proper parent relationship`);
-          }
+          const segmentInfo = [
+            `\nSegment ${index+1}:`,
+            `  Type: ${metadata?.type || "unknown"}`,
+            `  Name: ${metadata?.name || "Unnamed"}`,
+            `  Content preview: ${content.substring(0, 100)}...`,
+            `  Connected to parent: ${metadata?.parent_id === parentId ? '✓' : 'WARNING: Missing proper parent relationship'}`
+          ].join('\n');
+
+          return { success: true, info: segmentInfo };
         } catch (error) {
-          console.error(`Error retrieving segment ${segmentId}:`, error);
+          return {
+            success: false,
+            info: `Error retrieving segment ${segmentId}: ${error}`
+          };
         }
-      }
+      });
+
+      const segmentResults = await Promise.all(segmentPromises);
+
+      // Output results
+      segmentResults.forEach(result => {
+        if (result.success) {
+          logger.info(result.info);
+        } else {
+          logger.error(result.info);
+        }
+      });
     } else {
-      console.log("Content was not segmented - this might indicate an issue with auto-segmentation");
+      logger.warn("Content was not segmented - this might indicate an issue with auto-segmentation");
     }
 
     // Check for mixed content flag
     if (mixedMemory.metadata?.has_mixed_content) {
-      console.log("Mixed content flag correctly set: ✓");
+      logger.info("Mixed content flag correctly set: ✓");
     } else {
-      console.log("Mixed content flag not set");
+      logger.info("Mixed content flag not set");
     }
 
   } catch (error) {
-    console.error("Error during auto-segmentation testing:", error);
+    logger.error("Error during auto-segmentation testing:", error);
   } finally {
     // Clean up - delete parent and all segments
-    console.log("\nCleaning up memories...");
+    logger.info("\nCleaning up memories...");
 
     try {
-      // Delete all segments first
-      for (const segmentId of segmentIds) {
-        try {
-          await deleteMemory(client, segmentId);
-          console.log(`Deleted segment ${segmentId}`);
-        } catch (error) {
-          console.error(`Error deleting segment ${segmentId}:`, error);
-        }
-      }
+      // Delete all segments first - using Promise.all for parallel operations
+      await Promise.all(
+        segmentIds.map(segmentId =>
+          deleteMemory({
+            client,
+            memoryId: segmentId
+          })
+            .then(() => logger.memory.delete(`Deleted segment ${segmentId}`))
+            .catch(error => logger.error(`Error deleting segment ${segmentId}:`, error))
+        )
+      );
 
       // Then delete parent
       if (parentId) {
-        await deleteMemory(client, parentId);
-        console.log(`Deleted parent memory ${parentId}`);
+        await deleteMemory({
+          client,
+          memoryId: parentId
+        });
+        logger.memory.delete(`Deleted parent memory ${parentId}`);
       }
     } catch (error) {
-      console.error("Error during cleanup:", error);
+      logger.error("Error during cleanup:", error);
     }
   }
 }
@@ -507,27 +573,30 @@ async function testAutoSegmentation(client: Client): Promise<void> {
  * Test content-specific search capabilities
  */
 async function testContentSpecificSearch(client: Client): Promise<void> {
-  console.log("\n--- Testing Content-Specific Search ---\n");
+  logger.title("Testing Content-Specific Search");
 
   const createdIds: string[] = [];
 
   try {
     // Create memories with different content types
-    console.log("Creating test memories with different content types...");
+    logger.memory.create("Creating test memories with different content types...");
 
-    // Text memory
-    const textMemory = await createMemory(
-      client,
-      "Python is a versatile programming language used for data science, web development, and automation.",
-      "Python Overview",
-      { enable_llm_analysis: true }
-    );
-    if (textMemory && textMemory.id) createdIds.push(textMemory.id);
+    // Define the type for memory configurations
+    interface MemoryConfig {
+      content: string;
+      name: string;
+      metadata: Record<string, any>;
+    }
 
-    // Code memory
-    const codeMemory = await createMemory(
-      client,
-      `def binary_search(arr, target):
+    // Create memories with functional array of configurations
+    const memoryConfigs: MemoryConfig[] = [
+      {
+        content: "Python is a versatile programming language used for data science, web development, and automation.",
+        name: "Python Overview",
+        metadata: { enable_llm_analysis: true }
+      },
+      {
+        content: `def binary_search(arr, target):
     left, right = 0, len(arr) - 1
     while left <= right:
         mid = (left + right) // 2
@@ -538,39 +607,45 @@ async function testContentSpecificSearch(client: Client): Promise<void> {
         else:
             right = mid - 1
     return -1`,
-      "Binary Search Algorithm",
-      { enable_llm_analysis: true }
-    );
-    if (codeMemory && codeMemory.id) createdIds.push(codeMemory.id);
-
-    // Mixed content memory
-    const mixedMemory = await createMemory(
-      client,
-      MIXED_CONTENT_SAMPLE,
-      "Sorting Algorithms Guide",
-      { enable_llm_analysis: true, enable_auto_segmentation: true }
-    );
-
-    if (mixedMemory && mixedMemory.id) {
-      createdIds.push(mixedMemory.id);
-
-      // Add segment IDs to the cleanup list if segmentation occurred
-      if (mixedMemory.metadata && mixedMemory.metadata.segment_ids) {
-        let segments: string[] = [];
-        if (typeof mixedMemory.metadata.segment_ids === 'string') {
-          try {
-            segments = JSON.parse(mixedMemory.metadata.segment_ids);
-          } catch (error) {
-            console.error("Error parsing segment_ids:", error);
-          }
-        } else if (Array.isArray(mixedMemory.metadata.segment_ids)) {
-          segments = mixedMemory.metadata.segment_ids;
-        }
-        createdIds.push(...segments);
+        name: "Binary Search Algorithm",
+        metadata: { enable_llm_analysis: true }
+      },
+      {
+        content: MIXED_CONTENT_SAMPLE,
+        name: "Sorting Algorithms Guide",
+        metadata: { enable_llm_analysis: true, enable_auto_segmentation: true }
       }
-    }
+    ];
 
-    console.log(`Created ${createdIds.length} test memories`);
+    // Create memories and collect IDs
+    const memoryResults = await Promise.all(
+      memoryConfigs.map(config =>
+        createMemory({
+          client,
+          content: config.content,
+          name: config.name,
+          metadata: config.metadata
+        })
+      )
+    );
+
+    // Process results and collect IDs
+    memoryResults.forEach(memory => {
+      if (memory?.id) {
+        createdIds.push(memory.id);
+
+        // Add segment IDs to the cleanup list if segmentation occurred
+        if (memory.metadata?.segment_ids) {
+          const segments: string[] = typeof memory.metadata.segment_ids === 'string'
+            ? parseJsonSafely(memory.metadata.segment_ids, [])
+            : Array.isArray(memory.metadata.segment_ids) ? memory.metadata.segment_ids : [];
+
+          createdIds.push(...segments);
+        }
+      }
+    });
+
+    logger.highlight(`Created ${createdIds.length} test memories`);
 
     // Test different search queries
     const searchQueries = [
@@ -580,74 +655,105 @@ async function testContentSpecificSearch(client: Client): Promise<void> {
       "quicksort vs merge sort"
     ];
 
+    // Process queries sequentially
     for (const query of searchQueries) {
-      console.log(`\nSearching for: "${query}"`);
+      logger.memory.search(`Searching for: "${query}"`);
 
       try {
-        const searchResults = await searchMemories(client, query, {
-          enable_llm_analysis: true
+        const searchResults = await searchMemories({
+          client,
+          query,
+          metadataFilter: {
+            enable_llm_analysis: true
+          }
         });
 
-        console.log(`Found ${searchResults.memories?.length || 0} results:`);
+        const { memories = [] } = searchResults;
+        logger.highlight(`Found ${memories.length || 0} results:`);
 
-        if (searchResults.memories && searchResults.memories.length > 0) {
-          searchResults.memories.forEach((memory: Memory, index: number) => {
-            const contentPreview = memory.content.length > 100
-              ? memory.content.substring(0, 100) + "..."
-              : memory.content;
+        if (memories.length > 0) {
+          memories.forEach((memory, index) => {
+            const { name, metadata = {}, content } = memory;
+            const displayName = name || metadata.name || 'Unnamed';
+            const contentPreview = content.length > 100
+              ? content.substring(0, 100) + "..."
+              : content;
 
-            console.log(`${index + 1}. ${memory.name || memory.metadata?.name || 'Unnamed'}`);
-            console.log(`   Type: ${memory.metadata?.type || "unknown"}`);
-            console.log(`   Content: ${contentPreview}`);
+            const memoryInfo = [
+              `${index + 1}. ${displayName}`,
+              `   Type: ${metadata.type || "unknown"}`,
+              `   Content: ${contentPreview}`
+            ].join('\n');
+
+            logger.result(memoryInfo);
           });
         } else {
-          console.log("No results found");
+          logger.warn("No results found");
         }
 
         // For code-related queries, try with content-type filter
         if (query.includes("search") || query.includes("algorithm")) {
-          console.log(`\nSearching for "${query}" with code type filter:`);
+          logger.memory.search(`Searching for "${query}" with code type filter:`);
 
-          const codeResults = await searchMemoriesWithFilter(client, query, {
-            type: "code"
+          const codeResults = await searchMemoriesWithFilter({
+            client,
+            query,
+            metadataFilter: {
+              type: "code"
+            }
           });
 
-          console.log(`Found ${codeResults.memories?.length || 0} code results`);
+          const { memories: codeMemories = [] } = codeResults;
+          logger.highlight(`Found ${codeMemories.length || 0} code results 📝`);
 
-          if (codeResults.memories && codeResults.memories.length > 0) {
-            codeResults.memories.forEach((memory: Memory, index: number) => {
-              console.log(`${index + 1}. ${memory.name || memory.metadata?.name || 'Unnamed'}`);
-              console.log(`   Type: ${memory.metadata?.type || "unknown"}`);
-            });
+          if (codeMemories.length > 0) {
+            codeMemories
+              .map((memory, index) => {
+                const { name, metadata = {} } = memory;
+                const displayName = name || metadata.name || 'Unnamed';
+                return `${index + 1}. ${displayName}\n   Type: ${metadata.type || "unknown"}`;
+              })
+              .forEach(info => logger.result(info));
           }
         }
 
       } catch (error) {
-        console.error(`Error searching for "${query}":`, error);
+        logger.error(`Error searching for "${query}":`, error);
       }
     }
 
   } catch (error) {
-    console.error("Error during content-specific search testing:", error);
+    logger.error("Error during content-specific search testing:", error);
   } finally {
-    // Clean up all created memories
-    console.log("\nCleaning up created memories...");
-    for (const id of createdIds) {
-      try {
-        await deleteMemory(client, id);
-        console.log(`Deleted memory ${id}`);
-      } catch (error) {
-        console.error(`Error deleting memory ${id}:`, error);
-      }
-    }
+    // Clean up all created memories with Promise.all for parallel deletion
+    logger.info("\nCleaning up created memories...");
+
+    await Promise.all(
+      createdIds.map(id =>
+        deleteMemory({
+          client,
+          memoryId: id
+        })
+          .then(() => logger.memory.delete(`Deleted memory ${id}`))
+          .catch(error => logger.error(`Error deleting memory ${id}:`, error))
+      )
+    );
   }
 }
 
 /**
  * Delete a memory by ID
  */
-async function deleteMemory(client: Client, memoryId: string): Promise<any> {
+async function deleteMemory({
+  client,
+  memoryId
+}: {
+  client: Client,
+  memoryId: string
+}): Promise<any> {
   try {
+    logger.memory.delete(`Deleting memory ${memoryId}`);
+
     const result = await client.callTool({
       name: "delete_memory",
       arguments: {
@@ -655,63 +761,77 @@ async function deleteMemory(client: Client, memoryId: string): Promise<any> {
       }
     });
 
-    if (result.content && Array.isArray(result.content) && result.content.length > 0) {
-      try {
-        return JSON.parse(result.content[0].text);
-      } catch (error) {
-        return result.content[0].text;
-      }
-    }
-
-    return result;
+    const textContent = extractTextContent(result);
+    return textContent
+      ? parseJsonSafely(textContent, result)
+      : result;
   } catch (error) {
-    console.error(`Error deleting memory ${memoryId}:`, error);
+    logger.error(`Error deleting memory ${memoryId}:`, error);
     throw error;
   }
 }
 
 /**
- * Search memories with metadata filtering
+ * Search for memories using the search_memories tool
  */
-async function searchMemoriesWithFilter(
+async function searchMemories({
+  client,
+  query,
+  metadataFilter,
+  topK = 5
+}: {
   client: Client,
   query: string,
   metadataFilter?: Record<string, any>,
-  topK: number = 5
-): Promise<SearchResult> {
-  try {
-    const args: any = {
-      query,
-      top_k: topK
-    };
+  topK?: number
+}): Promise<SearchResult> {
+  return searchMemoriesWithFilter({
+    client,
+    query,
+    metadataFilter,
+    topK
+  });
+}
 
-    if (metadataFilter) {
-      args.metadata_filter = metadataFilter;
-    }
+/**
+ * Search memories with metadata filtering
+ */
+async function searchMemoriesWithFilter({
+  client,
+  query,
+  metadataFilter,
+  topK = 5
+}: {
+  client: Client,
+  query: string,
+  metadataFilter?: Record<string, any>,
+  topK?: number
+}): Promise<SearchResult> {
+  try {
+    // Build arguments object immutably
+    const args = {
+      query,
+      top_k: topK,
+      ...(metadataFilter && { metadata_filter: metadataFilter })
+    };
 
     const result = await client.callTool({
       name: "search_memories",
       arguments: args
     });
 
-    if (result.content && Array.isArray(result.content) && result.content.length > 0) {
-      try {
-        return JSON.parse(result.content[0].text) as SearchResult;
-      } catch (error) {
-        console.error("Error parsing search results:", error);
-        return { memories: [] };
-      }
-    }
-
-    return { memories: [] };
+    const textContent = extractTextContent(result);
+    return textContent
+      ? parseJsonSafely(textContent, { memories: [] })
+      : { memories: [] };
   } catch (error) {
-    console.error("Error searching memories:", error);
+    logger.error("Error searching memories:", error);
     throw error;
   }
 }
 
 // Run the client
 main().catch((error: unknown) => {
-  console.error("Unhandled error:", error);
+  logger.error("Unhandled error:", error);
   process.exit(1);
 });

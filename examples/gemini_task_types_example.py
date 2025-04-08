@@ -93,7 +93,7 @@ def main():
     logger.info("Generating embeddings for code sample with different task types...")
     embeddings["code_default"] = memory_system.llm_controller.get_embeddings(CODE_SAMPLE)
     embeddings["code_document"] = memory_system.llm_controller.get_embeddings(
-        CODE_SAMPLE, task_type="CODE_RETRIEVAL_DOCUMENT"
+        CODE_SAMPLE, task_type="RETRIEVAL_DOCUMENT"
     )
     embeddings["code_query"] = memory_system.llm_controller.get_embeddings(
         CODE_SAMPLE, task_type="CODE_RETRIEVAL_QUERY"

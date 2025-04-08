@@ -14,6 +14,7 @@ import uuid
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
+from rank_bm25 import BM25Okapi
 from sentence_transformers.cross_encoder import CrossEncoder
 
 from amem.core.llm_content_analyzer import LLMContentAnalyzer
@@ -473,7 +474,6 @@ class AsyncBM25Retriever:
             self.bm25 = None
             self.corpus = []
             self.doc_ids = []
-            self.initialized = False
         except ImportError:
             logger.error("rank_bm25 not installed. Run: pip install rank-bm25")
             raise
@@ -485,7 +485,6 @@ class AsyncBM25Retriever:
             document: Text content to add
             doc_id: Unique document ID
         """
-        from rank_bm25 import BM25Okapi
 
         # Tokenize document
         tokenized_doc = document.lower().split()
@@ -494,7 +493,6 @@ class AsyncBM25Retriever:
 
         # Rebuild BM25 index
         self.bm25 = BM25Okapi(self.corpus)
-        self.initialized = True
 
     async def rebuild_index(self, documents: List[str], doc_ids: List[str]):
         """Rebuild the entire BM25 index.
@@ -503,12 +501,10 @@ class AsyncBM25Retriever:
             documents: List of document texts
             doc_ids: List of document IDs
         """
-        from rank_bm25 import BM25Okapi
 
         self.corpus = [doc.lower().split() for doc in documents]
         self.doc_ids = doc_ids
         self.bm25 = BM25Okapi(self.corpus)
-        self.initialized = True
 
     async def search(self, query: str, top_k: int = 5):
         """Search for documents using BM25.
@@ -520,8 +516,6 @@ class AsyncBM25Retriever:
         Returns:
             List of search results with id, score
         """
-        if not self.initialized:
-            return []
 
         # Tokenize query
         tokenized_query = query.lower().split()
@@ -620,8 +614,7 @@ class AgenticMemorySystem:
         embed_model: Optional[str] = None,
         api_key: Optional[str] = None,
         persist_directory: Optional[str] = None,
-        reranker_model: Optional[str] = None,
-        jina_api_key: Optional[str] = None,  # Jina might require API key for some models/usage
+        reranker_model: Optional[str] = None,  # Jina might require API key for some models/usage
         enable_llm_analysis: bool = False,
         enable_auto_segmentation: bool = False,
         **kwargs,
@@ -636,7 +629,6 @@ class AgenticMemorySystem:
             api_key: API key for the LLM backend
             persist_directory: Directory to persist vector store data
             reranker_model: The Jina reranker model name.
-            jina_api_key: Optional API key for Jina services.
             enable_llm_analysis: Whether to use LLM to analyze content and determine optimal storage
             enable_auto_segmentation: Whether to automatically segment mixed content into separate memories
             **kwargs: Additional configuration options.
@@ -651,7 +643,6 @@ class AgenticMemorySystem:
         _llm_model = llm_model or os.getenv("LLM_MODEL", DEFAULT_GEMINI_LLM_MODEL)
         _embed_model = embed_model or os.getenv("EMBED_MODEL", DEFAULT_GEMINI_EMBED_MODEL)
         _reranker_model = reranker_model or os.getenv("JINA_RERANKER_MODEL", DEFAULT_JINA_RERANKER_MODEL)
-        jina_api_key or os.getenv("JINA_API_KEY")
 
         logger.info(f"Initializing async memory system for project: {project_name}")
         logger.info(f"  LLM Backend: {llm_backend}")
@@ -661,11 +652,19 @@ class AgenticMemorySystem:
         logger.info(f"  Persistence Directory: {self.persist_directory}")
 
         # Initialize LLM Controller and Analyzer
+        # Get the appropriate API key based on the backend
+        if llm_backend == "gemini":
+            effective_api_key = api_key or os.getenv("GOOGLE_API_KEY")
+        elif llm_backend == "openai":
+            effective_api_key = api_key or os.getenv("OPENAI_API_KEY")
+        else:
+            effective_api_key = api_key
+
         self.llm_controller = LLMController(
             backend=llm_backend,
             model=_llm_model,
             embed_model=_embed_model,
-            api_key=api_key or os.getenv("GOOGLE_API_KEY") or os.getenv("OPENAI_API_KEY"),  # Pass relevant API key
+            api_key=effective_api_key,
         )
         self.content_analyzer = LLMContentAnalyzer(self.llm_controller)
 
@@ -695,7 +694,7 @@ class AgenticMemorySystem:
         try:
             self.reranker = CrossEncoder(
                 _reranker_model,
-                automodel_args={"torch_dtype": "auto"},  # Use auto for best available dtype
+                model_kwargs={"torch_dtype": "auto"},  # Use auto for best available dtype
                 trust_remote_code=True,  # Often needed for custom models like Jina's
             )
             logger.info(f"Initialized reranker: {_reranker_model}")
@@ -780,6 +779,7 @@ class AgenticMemorySystem:
                 logger.info("No existing documents found to load.")
         except Exception as e:
             logger.error(f"Error loading existing documents: {e}")
+            raise
 
     async def _analyze_content(self, content: str) -> Dict[str, Any]:
         """Helper method to analyze content (synchronously for now)."""
@@ -791,17 +791,7 @@ class AgenticMemorySystem:
             return analysis_result
         except Exception as e:
             logger.error(f"Error during content analysis: {e}", exc_info=True)
-            # Return default analysis on error
-            return {
-                "primary_type": "general",
-                "keywords": [],
-                "summary": "",
-                "sentiment": "neutral",
-                "importance": 0.5,
-                "storage_task_type": "RETRIEVAL_DOCUMENT",
-                "confidence": 0.0,
-                "has_mixed_content": False,
-            }
+            raise
 
     async def create(self, content: str, name: Optional[str] = None, **extra_metadata) -> MemoryNote:
         """Create a new memory note.
@@ -825,7 +815,7 @@ class AgenticMemorySystem:
                 raise RuntimeError("Memory system failed to initialize.")
 
         logger.info(f"🧠 Creating memory note. Name: '{name}'")
-
+        storage_task_type = "RETRIEVAL_DOCUMENT"
         # Apply LLM analysis if enabled
         if self.enable_llm_analysis:
             # Use the content analyzer to analyze the content
@@ -836,7 +826,7 @@ class AgenticMemorySystem:
                 extra_metadata["type"] = analysis.get("primary_type", "general")
 
             # Get recommended storage task type
-            storage_task_type = analysis.get("storage_task_type")
+            storage_task_type = analysis.get("storage_task_type", "RETRIEVAL_DOCUMENT")
 
             # Add analysis results to metadata
             extra_metadata["analysis_results"] = {
@@ -845,10 +835,6 @@ class AgenticMemorySystem:
                 "has_mixed_content": analysis.get("has_mixed_content", False),
                 "type_proportions": analysis.get("types", {}),
             }
-        else:
-            # Default analysis without LLM
-            analysis = await self._analyze_content(content)
-            storage_task_type = analysis.get("storage_task_type")
 
         # Apply auto-segmentation if enabled and content is mixed
         if (
@@ -871,10 +857,7 @@ class AgenticMemorySystem:
                     "segment_count": len(segments),
                 }
 
-                # 1. Generate embedding (if needed)
-                parent_embedding = None
-                if self.llm_controller and storage_task_type:
-                    parent_embedding = self.llm_controller.get_embeddings(content, task_type=storage_task_type)
+                parent_embedding = self.llm_controller.get_embeddings(content, task_type=storage_task_type)
 
                 # 2. Prepare metadata
                 base_metadata = {
@@ -1053,14 +1036,8 @@ class AgenticMemorySystem:
                 document=content, doc_id=note_id, metadata=processed_metadata, embedding=embedding
             )
             logger.info(f"📄 Added document {note_id} to ChromaDB")
-        except ValueError as e:
-            # Catch potential re-raised error from retriever
-            logger.error(f"❌ Failed to add document {note_id} to vector store: {e}", exc_info=True)
-            # Decide if we should still create the in-memory note or raise further
-            raise
         except Exception as e:
             logger.error(f"❌ Unexpected error adding document {note_id} to vector store: {e}", exc_info=True)
-            # Decide if we should still create the in-memory note or raise further
             raise
 
         # 5. Create MemoryNote object
@@ -1239,7 +1216,7 @@ class AgenticMemorySystem:
         logger.info(f"🔎 Searching memories for: '{query}' ({log_params})")
 
         # 1. Analyze query to get optimal task type (if task_type not specified and LLM analysis is enabled)
-        query_task_type = task_type
+        query_task_type = task_type or "RETRIEVAL_QUERY"
         if not query_task_type and self.enable_llm_analysis:
             # Use LLM to analyze the query and determine the optimal task type
             query_analysis = self.content_analyzer.analyze_content_type(query)
@@ -1259,11 +1236,6 @@ class AgenticMemorySystem:
             logger.info(
                 f"📊 Query analysis: task_type={query_task_type}, primary_type={query_analysis.get('primary_type')}"
             )
-        else:
-            # If not using LLM analysis or task_type already specified, use basic analysis
-            basic_analysis = await self._analyze_content(query)
-            if not query_task_type:
-                query_task_type = basic_analysis.get("storage_task_type")
 
         # Update metadata filter to include content type if specified
         if content_type:

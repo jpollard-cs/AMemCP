@@ -64,7 +64,7 @@ class LLMContentAnalyzer:
         2. If mixed, the proportion of each type (e.g., 70% code, 30% explanation)
         3. Confidence in this classification (0.0 to 1.0)
         4. The most appropriate embedding task types:
-           - For storage: CODE_RETRIEVAL_DOCUMENT, RETRIEVAL_DOCUMENT, QUESTION_ANSWERING
+           - For storage: RETRIEVAL_DOCUMENT, QUESTION_ANSWERING
            - For queries: CODE_RETRIEVAL_QUERY, RETRIEVAL_QUERY
 
         Return your analysis in the following JSON format:
@@ -78,7 +78,7 @@ class LLMContentAnalyzer:
                 "other": 0.0-1.0
             }},
             "recommended_task_types": {{
-                "storage": "CODE_RETRIEVAL_DOCUMENT|RETRIEVAL_DOCUMENT|QUESTION_ANSWERING",
+                "storage": "RETRIEVAL_DOCUMENT|QUESTION_ANSWERING",
                 "query": "CODE_RETRIEVAL_QUERY|RETRIEVAL_QUERY"
             }},
             "has_mixed_content": true|false
@@ -181,7 +181,7 @@ class LLMContentAnalyzer:
             {{
                 "content": "segment text here",
                 "type": "code|question|documentation|other",
-                "task_type": "CODE_RETRIEVAL_DOCUMENT|RETRIEVAL_DOCUMENT|QUESTION_ANSWERING|RETRIEVAL_QUERY",
+                "task_type": "RETRIEVAL_DOCUMENT|QUESTION_ANSWERING|RETRIEVAL_QUERY",
                 "order": 0,
                 "metadata": {{
                     "subtitle": "optional segment title",
@@ -275,9 +275,7 @@ class LLMContentAnalyzer:
                 else:
                     return "RETRIEVAL_QUERY"
             else:
-                if analysis.get("primary_type") == "code":
-                    return "CODE_RETRIEVAL_DOCUMENT"
-                elif analysis.get("primary_type") == "question":
+                if analysis.get("primary_type") == "question":
                     return "QUESTION_ANSWERING"
                 else:
                     return "RETRIEVAL_DOCUMENT"

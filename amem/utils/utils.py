@@ -28,45 +28,51 @@ def setup_logger(name: str, level: int = logging.INFO) -> logging.Logger:
     """
     logger = logging.getLogger(name)
 
-    # Only configure if no handlers exist (to avoid duplicate configuration)
-    if not logger.hasHandlers():
-        if has_colorlog:
-            # Create a colorlog handler
-            handler = colorlog.StreamHandler()
-            handler.setFormatter(
-                colorlog.ColoredFormatter(
-                    "%(log_color)s%(asctime)s [%(name)s] %(levelname)s: %(message)s",
-                    datefmt="%Y-%m-%d %H:%M:%S",
-                    log_colors={
+    # Remove all existing handlers to prevent duplicate logging
+    while logger.handlers:
+        logger.removeHandler(logger.handlers[0])
+
+    # Prevent propagation to the root logger to avoid duplicate logs
+    logger.propagate = False
+
+    # Configure with our custom handler
+    if has_colorlog:
+        # Create a colorlog handler
+        handler = colorlog.StreamHandler()
+        handler.setFormatter(
+            colorlog.ColoredFormatter(
+                "%(log_color)s%(asctime)s [%(name)s] %(levelname)s: %(message)s",
+                datefmt="%Y-%m-%d %H:%M:%S",
+                log_colors={
+                    "DEBUG": "cyan",
+                    "INFO": "green",
+                    "WARNING": "yellow",
+                    "ERROR": "red",
+                    "CRITICAL": "red,bg_white",
+                },
+                secondary_log_colors={
+                    "message": {
                         "DEBUG": "cyan",
-                        "INFO": "green",
+                        "INFO": "white",
                         "WARNING": "yellow",
                         "ERROR": "red",
                         "CRITICAL": "red,bg_white",
-                    },
-                    secondary_log_colors={
-                        "message": {
-                            "DEBUG": "cyan",
-                            "INFO": "white",
-                            "WARNING": "yellow",
-                            "ERROR": "red",
-                            "CRITICAL": "red,bg_white",
-                        }
-                    },
-                )
+                    }
+                },
             )
-        else:
-            # Standard handler without colors
-            handler = logging.StreamHandler()
-            handler.setFormatter(
-                logging.Formatter("%(asctime)s [%(name)s] %(levelname)s: %(message)s", datefmt="%Y-%m-%d %H:%M:%S")
-            )
+        )
+    else:
+        # Standard handler without colors
+        handler = logging.StreamHandler()
+        handler.setFormatter(
+            logging.Formatter("%(asctime)s [%(name)s] %(levelname)s: %(message)s", datefmt="%Y-%m-%d %H:%M:%S")
+        )
 
-        # Set the log level
-        logger.setLevel(level)
+    # Set the log level
+    logger.setLevel(level)
 
-        # Add our custom handler
-        logger.addHandler(handler)
+    # Add our custom handler
+    logger.addHandler(handler)
 
     return logger
 
@@ -115,6 +121,6 @@ DEFAULT_PERSIST_DIR = "./data/chroma_db"
 DEFAULT_COLLECTION_PREFIX = "amem"
 
 # Default model names
-DEFAULT_GEMINI_LLM_MODEL = "gemini-1.5-pro-latest"
-DEFAULT_GEMINI_EMBED_MODEL = "text-embedding-004"
+DEFAULT_GEMINI_LLM_MODEL = "gemini-2.5-pro-exp-03-25"
+DEFAULT_GEMINI_EMBED_MODEL = "gemini-embedding-exp-03-07"
 DEFAULT_JINA_RERANKER_MODEL = "jinaai/jina-reranker-v2-base-multilingual"
