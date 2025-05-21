@@ -1,6 +1,6 @@
 # AMemCP TypeScript Client
 
-A TypeScript client for the AMemCP (Agentic Memory using Model Context Protocol) server.
+A TypeScript client built for **testing** the AMemCP server.
 
 ## Requirements
 
