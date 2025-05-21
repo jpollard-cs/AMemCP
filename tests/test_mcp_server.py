@@ -132,7 +132,7 @@ class TestMCPMemorySystem(unittest.TestCase):
     def setUp(self):
         """Set up the test environment for each test"""
         # Import here to avoid circular imports
-        from mcp.server.fastmcp import FastMCP
+        from fastmcp import FastMCP
 
         # Create MCP instance
         self.mcp = FastMCP("A-Mem Memory System Test")

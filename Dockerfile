@@ -28,11 +28,12 @@ RUN mkdir -p /app/chroma_db
 VOLUME /app/chroma_db
 
 # Expose port
-EXPOSE 8000
+EXPOSE 8010
+EXPOSE 8001
 
 # Healthcheck to verify the server is running
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-  CMD curl -f http://localhost:8000/ || exit 1
+  CMD curl -f http://localhost:8010/ || exit 1
 
 # Set environment variables (these will be overridden by docker-compose)
 ENV LLM_MODEL=""

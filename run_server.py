@@ -1,83 +1,99 @@
 #!/usr/bin/env python3
+"""Lightweight launcher for the MCP server
+
+*   Parses a minimal CLI (host, port, OTLP endpoint, etc.).
+*   Sets env vars for the underlying `AMemMCPServer`.
+*   Configures the OpenTelemetry OTLP HTTP exporter (if `--otel-endpoint` is given).
+*   Delegates everything else to `amem_mcp_server_refactored.AMemMCPServer`.
+
+Usage::
+
+    python run_amem_server.py --host 0.0.0.0 --port 8010 \
+        --project myproj --data-dir ./data \
+        --otel-endpoint http://localhost:4318 --debug-monitor
+
+If you *only* need default values you can just run ``python -m amem_mcp_server_refactored``
+which already has a ``__main__`` guard that calls ``server.run()``.
 """
-Run the AMemCP server using Uvicorn.
-"""
+from __future__ import annotations
 
 import argparse
+import logging
 import os
 import sys
-from typing import Dict
+from dataclasses import dataclass
 
-# Make sure amem module is in path
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from opentelemetry import trace
+from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
+from opentelemetry.sdk.resources import SERVICE_NAME, Resource
+from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.trace.export import BatchSpanProcessor
 
-import uvicorn
+from amem.server.mcp_fastmcp_server import AMemCPServer, ServerConfig  # pylint: disable=wrong-import-position
 
+# Ensure local imports work when running from repo root
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-def parse_args() -> Dict:
-    """Parse command line arguments."""
-    parser = argparse.ArgumentParser(description="Run the AMemCP server.")
-    parser.add_argument("--host", type=str, default="0.0.0.0", help="Host to bind to (default: 0.0.0.0)")
-    parser.add_argument("--port", type=int, default=8000, help="Port to bind to (default: 8000)")
-    parser.add_argument("--reload", action="store_true", help="Enable hot reloading for development")
-    parser.add_argument("--project", type=str, default=None, help="Project name (default: from env or 'default')")
-    parser.add_argument("--data-dir", type=str, default=None, help="Data directory (default: from env or './data')")
-    parser.add_argument("--log-level", type=str, default="info", help="Log level (default: info)")
-
-    return vars(parser.parse_args())
+_LOG = logging.getLogger("run_amem_server")
 
 
-def setup_environment(args: Dict) -> None:
-    """Set up environment variables based on command line args."""
-    if args.get("project"):
-        os.environ["PROJECT_NAME"] = args["project"]
-
-    if args.get("data_dir"):
-        os.environ["PERSIST_DIRECTORY"] = args["data_dir"]
-
-    # Ensure required env variables have defaults
-    if "PROJECT_NAME" not in os.environ:
-        os.environ["PROJECT_NAME"] = "default"
-
-    if "PERSIST_DIRECTORY" not in os.environ:
-        os.environ["PERSIST_DIRECTORY"] = "./data"
+def _parse_cli() -> argparse.Namespace:  # noqa: D401
+    parser = argparse.ArgumentParser(description="Launch A‑Mem MCP server")
+    parser.add_argument("--host", default="0.0.0.0")
+    parser.add_argument("--port", type=int, default=8010)
+    parser.add_argument("--project", help="Project / collection prefix")
+    parser.add_argument("--data-dir", help="Chroma persistence directory")
+    parser.add_argument("--log-level", default="info")
+    parser.add_argument("--otel-endpoint", help="OTLP HTTP endpoint, e.g. http://localhost:4318")
+    parser.add_argument("--service-name", default="amem-mcp-server")
+    parser.add_argument("--debug-monitor", action="store_true", help="Enable aiomonitor on 127.0.0.1:50101")
+    return parser.parse_args()
 
 
-def main() -> None:
-    """Main entry point."""
+@dataclass
+class _OTelCfg:
+    endpoint: str
+    service_name: str
+
+
+def _configure_otlp(cfg: _OTelCfg) -> None:
+    """Wire the global tracer provider to an OTLP HTTP exporter."""
+    resource = Resource(attributes={SERVICE_NAME: cfg.service_name})
+    provider = TracerProvider(resource=resource)
+    span_exporter = OTLPSpanExporter(endpoint=f"{cfg.endpoint.rstrip('/')}/v1/traces")
+    provider.add_span_processor(BatchSpanProcessor(span_exporter))
+    trace.set_tracer_provider(provider)
+    _LOG.info("OTLP exporter initialised → %s", cfg.endpoint)
+
+
+def _bootstrap_env(args: argparse.Namespace) -> None:
+    """Translate selected CLI flags into env vars consumed by ServerConfig."""
+    if args.project:
+        os.environ["PROJECT_NAME"] = args.project
+    if args.data_dir:
+        os.environ["PERSIST_DIRECTORY"] = args.data_dir
+    if args.debug_monitor:
+        os.environ["DEBUG_MONITOR"] = "1"
+
+
+def main():  # noqa: D401
+    args = _parse_cli()
+
+    # logging early so that OTel emits spans later
+    logging.basicConfig(level=args.log_level.upper(), format="%(asctime)s %(levelname)s %(name)s | %(message)s")
+
+    if args.otel_endpoint:
+        _configure_otlp(_OTelCfg(endpoint=args.otel_endpoint, service_name=args.service_name))
+
+    _bootstrap_env(args)
+
+    cfg = ServerConfig(host=args.host, port=args.port, debug_monitor=args.debug_monitor)
+    server = AMemCPServer(cfg)
+    _LOG.info("🚀  AMem MCP server starting at http://%s:%d …", cfg.host, cfg.port)
     try:
-        from amem.utils.utils import setup_logger
-
-        logger = setup_logger(__name__)
-
-        args = parse_args()
-        setup_environment(args)
-
-        host = args.get("host", "0.0.0.0")
-        port = args.get("port", 8000)
-        reload = args.get("reload", False)
-        log_level = args.get("log_level", "info")
-
-        logger.info(f"Starting AMemCP server on {host}:{port}")
-        logger.info(f"Project: {os.environ.get('PROJECT_NAME')}")
-        logger.info(f"Data directory: {os.environ.get('PERSIST_DIRECTORY')}")
-
-        # Disable uvicorn's default logging since we've already set up our own
-        uvicorn.run(
-            "amem.server:fastmcp_app",
-            host=host,
-            port=port,
-            reload=reload,
-            log_level=log_level,
-            log_config=None,  # Disable uvicorn's default logging configuration
-        )
+        server.run()
     except KeyboardInterrupt:
-        print("Server shutdown requested. Exiting...")
-        sys.exit(0)
-    except Exception as e:
-        print(f"Error running server: {e}")
-        sys.exit(1)
+        _LOG.info("👋  Shutdown via ctl-c")
 
 
-if __name__ == "__main__":
-    main()
+main()

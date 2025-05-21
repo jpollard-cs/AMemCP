@@ -1,12 +1,13 @@
-#!/usr/bin/env python3
 """
 LLM Controller Module
-Handles interactions with various LLM backends
+Handles interactions with various LLM backends and embedding generation.
 """
 
 from abc import ABC, abstractmethod
 from typing import Any, Dict, List, Optional
 
+# Import the interface
+from amem.core.interfaces import ICompletionProvider, IEmbeddingProvider
 from amem.core.llm_providers import get_provider
 from amem.utils.utils import setup_logger
 
@@ -14,6 +15,9 @@ from amem.utils.utils import setup_logger
 logger = setup_logger(__name__)
 
 
+# TODO: I'm not sure we need any of this - why not go directly to the provider or maybe we need some different abstraction, but this just seems to be arbitrarily adding two things together
+# that should be in different places - like get_empty_values seems like it should be in the MemoryNote cdomain model class
+# we can handle this as part of the refactor to separate embedding and completion providers
 class BaseLLMController(ABC):
     """Base class for LLM Controllers"""
 
@@ -21,13 +25,10 @@ class BaseLLMController(ABC):
     def get_empty_values(self, current_time: str) -> Dict[str, Any]:
         """Get empty values for analysis"""
 
-    @abstractmethod
-    def get_completion(self, prompt: str, response_format: Optional[Dict] = None, **kwargs) -> str:
-        """Get completion from the LLM"""
 
-
-class LLMController(BaseLLMController):
-    """Controller for memory metadata generation"""
+# Modify LLMController to implement IEmbeddingProvider
+class LLMController(BaseLLMController, IEmbeddingProvider, ICompletionProvider):
+    """Controller for LLM completions and embeddings."""
 
     def __init__(
         self, backend: str = "openai", model: str = None, embed_model: str = None, api_key: str = None, **kwargs
@@ -41,10 +42,14 @@ class LLMController(BaseLLMController):
         self.model = self.provider.model
         self.embed_model = self.provider.embed_model
 
-        logger.info(f"Initialized LLM Controller with provider: {backend}, model: {self.model}")
+        logger.info(
+            f"Initialized LLM Controller with provider: {backend}, model: {self.model}, embed_model: {self.embed_model}"
+        )
 
     def get_empty_values(self, current_time: str) -> Dict[str, Any]:
         """Get empty values for the note metadata"""
+        # This might be better placed elsewhere (e.g., in MemoryNote defaults or a factory)
+        # but kept here for now during refactoring.
         return {
             "keywords": [],
             "context": "",
@@ -58,18 +63,18 @@ class LLMController(BaseLLMController):
             "tags": [],
         }
 
-    def get_completion(self, prompt: str, response_format: Optional[Dict] = None, **kwargs) -> str:
-        """Get completion from the provider"""
+    async def get_completion(self, prompt: str, config: Optional[Dict] = None, **kwargs) -> str:
+        """Get completion from the provider (async)"""
         try:
-            response = self.provider.get_completion(prompt=prompt, response_format=response_format)
-            return response
+            # Pass the config dict to the provider's method
+            return await self.provider.get_completion(prompt=prompt, config=config)
         except Exception as e:
             logger.error(f"Error getting completion from provider: {e}")
-            # Return empty JSON if response format is JSON
             raise
 
-    def get_embeddings(self, text: str, task_type: Optional[str] = None) -> List[float]:
-        """Get embeddings from the provider
+    # Make get_embeddings async and match the IEmbedder interface
+    async def get_embeddings(self, text: str, task_type: Optional[str] = None) -> List[float]:
+        """Get embeddings from the provider.
 
         Args:
             text: The text to embed
@@ -79,25 +84,7 @@ class LLMController(BaseLLMController):
             List of floats representing the embedding vector
         """
         try:
-            embeddings = self.provider.get_embeddings(text=text, task_type=task_type)
-            return embeddings
+            return await self.provider.get_embeddings(text=text, task_type=task_type)
         except Exception as e:
             logger.error(f"Error getting embeddings from provider: {e}")
             raise
-
-
-# Legacy controller classes maintained for backward compatibility
-class OpenAIController(LLMController):
-    """OpenAI controller implementation (legacy)"""
-
-    def __init__(self, model: str = "gpt-4", api_key: Optional[str] = None):
-        """Initialize OpenAI controller"""
-        super().__init__(backend="openai", model=model, api_key=api_key)
-
-
-class OllamaController(LLMController):
-    """Ollama controller implementation (legacy)"""
-
-    def __init__(self, model: str = "llama3", base_url: str = "http://localhost:11434"):
-        """Initialize Ollama controller"""
-        super().__init__(backend="ollama", model=model, base_url=base_url)

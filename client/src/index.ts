@@ -11,7 +11,7 @@ import chalk from 'chalk';
 
 // Configuration
 // We need to use the SSE endpoint which is at /sse
-const SERVER_URL = "http://localhost:8000/sse";
+const SERVER_URL = "http://localhost:8010/sse";
 
 // Memory interfaces
 interface Memory {
@@ -125,73 +125,48 @@ const logger = {
   }
 };
 
-async function main(): Promise<void> {
-  logger.title("Starting AMemCP TypeScript Client");
+// Replace withMcpConnection with a generator-style session manager
+async function* mcpSession(): AsyncGenerator<Client, void, unknown> {
+  const transport = new SSEClientTransport(new URL(SERVER_URL), { eventSourceInit: { withCredentials: true } });
+  const client = new Client(
+    { name: "amem-ts-client", version: "1.0.0" },
+    { capabilities: { tools: {}, prompts: {}, resources: {} } }
+  );
   logger.connection.start(`Connecting to MCP server at: ${chalk.cyan(SERVER_URL)}`);
-
+  await client.connect(transport);
+  logger.connection.success("Connected to server!");
   try {
-    // Create SSE transport to connect to the server
-    const transport = new SSEClientTransport(
-      new URL(SERVER_URL),
-      {
-        // Enable redirects to handle any server routing redirects
-        eventSourceInit: {
-          withCredentials: true
-        }
-      }
-    );
-
-    logger.info("Transport initialized. Creating client...");
-
-    // Create client with capabilities needed
-    const client = new Client(
-      {
-        name: "amem-ts-client",
-        version: "1.0.0"
-      },
-      {
-        capabilities: {
-          tools: {},    // Enable tools capability
-          prompts: {},  // Enable prompts capability
-          resources: {} // Enable resources capability
-        }
-      }
-    );
-
-    logger.info("Client created. Connecting to server...");
-
-    // Connect to the server
-    await client.connect(transport);
-    logger.connection.success("Connected to server!");
-
-    // List available tools
-    logger.info("Listing available tools...");
-    const { tools = [] } = await client.listTools();
-    logger.highlight(`Found ${tools ? tools.length : 0} tools:`);
-
-    // Check if tools is an array before iterating
-    if (tools && Array.isArray(tools)) {
-      tools.forEach((tool: any) => {
-        logger.result(`${tool.name}: ${tool.description}`);
-      });
-
-      // Test basic memory operations
-      await testMemoryOperations(client);
-
-      // Test new LLM analysis features
-      logger.title("Testing LLM Content Analysis and Auto-Segmentation Features");
-      await testLLMContentAnalysis(client);
-      await testAutoSegmentation(client);
-      await testContentSpecificSearch(client);
-    } else {
-      logger.warn("No tools found or tools is not an array");
-    }
-
-    // Clean up - Note: There is no disconnect method; the connection will close
-    // when the transport is closed
+    yield client; // Yield the connected client to the caller
+  } finally {
     logger.connection.close("Closing transport...");
     await transport.close();
     logger.success("Transport closed.");
+  }
+}
+
+async function main(): Promise<void> {
+  logger.title("Starting AMemCP TypeScript Client");
+  try {
+    // Use the generator with for await...of
+    for await (const client of mcpSession()) {
+      logger.info("Listing available tools...");
+      const { tools = [] } = await client.listTools();
+      logger.highlight(`Found ${tools.length} tools:`);
+
+      if (tools && Array.isArray(tools)) {
+        tools.forEach((tool: Tool) => {
+          logger.result(`${tool.name}: ${tool.description}`);
+        });
+
+        await testMemoryOperations(client);
+        logger.title("Testing LLM Content Analysis and Auto-Segmentation Features");
+        await testLLMContentAnalysis(client);
+        await testAutoSegmentation(client);
+        await testContentSpecificSearch(client);
+      } else {
+        logger.warn("No tools found or tools is not an array");
+      }
+    }
   } catch (error: unknown) {
     logger.error("Error:", error);
   }

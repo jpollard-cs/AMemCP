@@ -7,13 +7,17 @@ Provides advanced content analysis and segmentation using LLMs.
 import json
 from typing import Any, Dict, List
 
+# Import the interface and controller
+from amem.core.interfaces import IContentAnalyzer
+from amem.core.llm_controller import LLMController  # Type hint for controller
 from amem.utils.utils import setup_logger
 
 # Configure logging
 logger = setup_logger(__name__)
 
 
-class LLMContentAnalyzer:
+# Implement the interface
+class LLMContentAnalyzer(IContentAnalyzer):
     """
     Advanced content analyzer that uses LLMs to:
     1. Classify content types with high precision
@@ -24,7 +28,7 @@ class LLMContentAnalyzer:
     especially for content with mixed types or ambiguous structure.
     """
 
-    def __init__(self, llm_controller):
+    def __init__(self, llm_controller: LLMController):
         """
         Initialize the content analyzer with an LLM controller
 
@@ -33,9 +37,10 @@ class LLMContentAnalyzer:
         """
         self.llm_controller = llm_controller
 
-    def analyze_content_type(self, text: str) -> Dict[str, Any]:
+    # Make analyze_content async
+    async def analyze_content(self, text: str) -> Dict[str, Any]:
         """
-        Analyze content to determine its type and characteristics
+        Analyze content to determine its type and characteristics (async)
 
         Uses LLM to classify content more precisely than rule-based methods.
         Handles mixed content, ambiguous queries, and contextual nuances.
@@ -50,9 +55,14 @@ class LLMContentAnalyzer:
             - types: Dict of all detected types with their proportions
             - recommended_task_types: Dict with recommended embedding task types
             - has_mixed_content: Whether content contains multiple types
+            - keywords: List of extracted keywords
+            - summary: Generated summary
+            - sentiment: Detected sentiment
+            - importance: Estimated importance score
         """
+        # Combine analysis into a single prompt for efficiency
         prompt = """
-        Analyze the following content and classify its type.
+        Analyze the following content comprehensively.
 
         Content:
         ```
@@ -60,76 +70,77 @@ class LLMContentAnalyzer:
         ```
 
         Determine:
-        1. The primary content type (code, question, documentation, mixed, or other)
-        2. If mixed, the proportion of each type (e.g., 70% code, 30% explanation)
-        3. Confidence in this classification (0.0 to 1.0)
-        4. The most appropriate embedding task types:
-           - For storage: RETRIEVAL_DOCUMENT, QUESTION_ANSWERING
-           - For queries: CODE_RETRIEVAL_QUERY, RETRIEVAL_QUERY
+        1.  Primary content type (e.g., code, question, documentation, discussion, mixed, general).
+        2.  If mixed, proportions of each type.
+        3.  Confidence in classification (0.0 to 1.0).
+        4.  Recommended embedding task types (storage and query). MUST be one of:
+            - Storage: RETRIEVAL_DOCUMENT, SEMANTIC_SIMILARITY, CLASSIFICATION, CLUSTERING
+            - Query: RETRIEVAL_QUERY, SEMANTIC_SIMILARITY, CLASSIFICATION, CLUSTERING
+            Choose RETRIEVAL_DOCUMENT/RETRIEVAL_QUERY for general text intended for search.
+        5.  Whether content seems mixed.
+        6.  Extract 5-10 relevant keywords.
+        7.  Generate a concise one-sentence summary.
+        8.  Overall sentiment (positive, negative, neutral).
+        9.  Estimated importance score (0.0 to 1.0, based on likely usefulness).
 
-        Return your analysis in the following JSON format:
+        Return ONLY the analysis as a single JSON object:
         {{
-            "primary_type": "code|question|documentation|mixed|other",
-            "confidence": 0.0-1.0,
-            "types": {{
-                "code": 0.0-1.0,
-                "question": 0.0-1.0,
-                "documentation": 0.0-1.0,
-                "other": 0.0-1.0
-            }},
-            "recommended_task_types": {{
-                "storage": "RETRIEVAL_DOCUMENT|QUESTION_ANSWERING",
-                "query": "CODE_RETRIEVAL_QUERY|RETRIEVAL_QUERY"
-            }},
-            "has_mixed_content": true|false
+            "primary_type": "string",
+            "confidence": float,
+            "types": {{ "type1": float, ... }},
+            "recommended_task_types": {{ "storage": "string", "query": "string" }},
+            "has_mixed_content": boolean,
+            "keywords": ["string", ...],
+            "summary": "string",
+            "sentiment": "positive|negative|neutral",
+            "importance": float
         }}
         """.format(
             content=text[:8000]
-        )  # Limit content size for LLM context window
+        )  # Limit context
+
+        default_analysis = {
+            "primary_type": "general",
+            "confidence": 0.5,
+            "types": {"other": 1.0},
+            "recommended_task_types": {"storage": "RETRIEVAL_DOCUMENT", "query": "RETRIEVAL_QUERY"},
+            "has_mixed_content": False,
+            "keywords": [],
+            "summary": "",
+            "sentiment": "neutral",
+            "importance": 0.5,
+        }
 
         try:
-            response = self.llm_controller.get_completion(
+            # Use the async get_completion method
+            response_str = await self.llm_controller.get_completion(
                 prompt=prompt,
-                response_format={
-                    "type": "json_schema",
-                    "json_schema": {
-                        "type": "object",
-                        "properties": {
-                            "primary_type": {"type": "string"},
-                            "confidence": {"type": "number"},
-                            "types": {
-                                "type": "object",
-                                "properties": {
-                                    "code": {"type": "number"},
-                                    "question": {"type": "number"},
-                                    "documentation": {"type": "number"},
-                                    "other": {"type": "number"},
-                                },
-                            },
-                            "recommended_task_types": {
-                                "type": "object",
-                                "properties": {"storage": {"type": "string"}, "query": {"type": "string"}},
-                            },
-                            "has_mixed_content": {"type": "boolean"},
-                        },
-                    },
-                },
+                # Assuming the LLM supports JSON mode or similar for structured output
+                # The specific format parameter might vary by LLM provider
+                # Use the Gemini-specific config for JSON output
+                config={"response_mime_type": "application/json"},
             )
-            return json.loads(response)
+            analysis = json.loads(response_str)
+
+            # Basic validation/cleanup
+            analysis.setdefault("keywords", [])
+            analysis.setdefault("summary", "")
+            analysis.setdefault("sentiment", "neutral")
+            analysis.setdefault("importance", 0.5)
+            analysis.setdefault("recommended_task_types", default_analysis["recommended_task_types"])
+
+            return analysis
+        except json.JSONDecodeError as json_err:
+            logger.error(f"Error decoding LLM analysis response: {json_err}. Response: '{response_str[:200]}...'")
+            return default_analysis
         except Exception as e:
             logger.error(f"Error analyzing content type: {e}")
-            # Return default analysis on error
-            return {
-                "primary_type": "general",
-                "confidence": 0.5,
-                "types": {"code": 0.0, "question": 0.0, "documentation": 0.0, "other": 1.0},
-                "recommended_task_types": {"storage": "RETRIEVAL_DOCUMENT", "query": "RETRIEVAL_QUERY"},
-                "has_mixed_content": False,
-            }
+            return default_analysis
 
-    def segment_content(self, text: str) -> List[Dict[str, Any]]:
+    # Make segment_content async
+    async def segment_content(self, text: str) -> List[Dict[str, Any]]:
         """
-        Segment mixed content into coherent chunks by type
+        Segment mixed content into coherent chunks by type (async)
 
         Uses LLM to identify natural segment boundaries in mixed content,
         preserving semantic coherence while separating different content types.
@@ -145,25 +156,27 @@ class LLMContentAnalyzer:
             - order: Original position in the document
             - metadata: Additional segment attributes
         """
-        # First check if segmentation is needed
-        analysis = self.analyze_content_type(text)
+        # First check if segmentation is needed (reuse async analyze_content)
+        analysis = await self.analyze_content(text)
 
-        if not analysis.get("has_mixed_content", False) or analysis.get("confidence", 0) < 0.7:
-            # If content is not mixed or classification confidence is low, return as single segment
+        # Stricter check: only segment if clearly mixed and confidence is high
+        if not analysis.get("has_mixed_content", False) or analysis.get("confidence", 0) < 0.8:
+            logger.debug("Content not considered mixed or confidence too low, returning single segment.")
             return [
                 {
                     "content": text,
                     "type": analysis.get("primary_type", "general"),
                     "task_type": analysis.get("recommended_task_types", {}).get("storage", "RETRIEVAL_DOCUMENT"),
                     "order": 0,
-                    "metadata": {"is_complete_document": True, "confidence": analysis.get("confidence", 0.5)},
+                    "metadata": {"is_complete_document": True, "analysis": analysis},
                 }
             ]
 
+        logger.debug("Content is mixed, attempting segmentation.")
         # Content is mixed, use LLM to segment it
         prompt = """
         Segment the following mixed content into coherent parts based on type.
-        Identify natural boundaries between different content types (code, questions, documentation, etc.)
+        Identify natural boundaries between different content types (e.g., code, questions, documentation).
 
         Content:
         ```
@@ -171,113 +184,97 @@ class LLMContentAnalyzer:
         ```
 
         For each segment, provide:
-        1. The segment text, preserving all original formatting
-        2. The content type of the segment
-        3. The appropriate embedding task type
-        4. The segment's position in the document
+        1. The exact segment text (preserve formatting).
+        2. The primary content type.
+        3. The recommended embedding task type for storage.
+        4. Segment's position (order).
+        5. Optional metadata (e.g., subtitle, language).
 
-        Return the segmentation as a JSON array:
+        Return ONLY the segmentation as a JSON array:
         [
             {{
-                "content": "segment text here",
-                "type": "code|question|documentation|other",
-                "task_type": "RETRIEVAL_DOCUMENT|QUESTION_ANSWERING|RETRIEVAL_QUERY",
-                "order": 0,
-                "metadata": {{
-                    "subtitle": "optional segment title",
-                    "language": "language if code",
-                    "confidence": 0.0-1.0
-                }}
+                "content": "string",
+                "type": "string",
+                "task_type": "string",
+                "order": integer,
+                "metadata": {{ "subtitle": "string", "language": "string", ... }}
             }},
-            // additional segments...
+            ...
         ]
 
-        Ensure that:
-        - Each segment is semantically coherent
-        - Code segments include complete syntactic blocks (don't split functions or classes)
-        - Question segments include the full question context
-        - Explanatory text is grouped logically by topic
-        - All original content is preserved across all segments
+        Guidelines:
+        - Ensure segments are semantically coherent.
+        - Do not split code blocks unnecessarily.
+        - Preserve all original content.
+        - Assign a logical type and task_type to each segment.
         """.format(
             content=text[:8000]
-        )  # Limit content size for LLM context window
+        )  # Limit context
+
+        default_segment = [
+            {
+                "content": text,
+                "type": analysis.get("primary_type", "general"),
+                "task_type": analysis.get("recommended_task_types", {}).get("storage", "RETRIEVAL_DOCUMENT"),
+                "order": 0,
+                "metadata": {"is_complete_document": True, "analysis": analysis, "error": "Segmentation failed"},
+            }
+        ]
 
         try:
-            response = self.llm_controller.get_completion(
+            # Use async get_completion
+            response_str = await self.llm_controller.get_completion(
                 prompt=prompt,
-                response_format={
-                    "type": "json_schema",
-                    "json_schema": {
-                        "type": "array",
-                        "items": {
-                            "type": "object",
-                            "properties": {
-                                "content": {"type": "string"},
-                                "type": {"type": "string"},
-                                "task_type": {"type": "string"},
-                                "order": {"type": "integer"},
-                                "metadata": {
-                                    "type": "object",
-                                    "properties": {
-                                        "subtitle": {"type": "string"},
-                                        "language": {"type": "string"},
-                                        "confidence": {"type": "number"},
-                                    },
-                                },
-                            },
-                            "required": ["content", "type", "task_type", "order"],
-                        },
-                    },
-                },
+                # Assume JSON array output format is supported
+                # Use the Gemini-specific config for JSON output
+                # TODO: abstract this so it will work for any supported LLM
+                config={"response_mime_type": "application/json"},
             )
-            segments = json.loads(response)
+            # The response might be the JSON array directly, or nested in a key.
+            # Handle both common cases.
+            try:
+                segments = json.loads(response_str)
+                if isinstance(segments, list):
+                    # Already a list, use directly
+                    pass
+                elif isinstance(segments, dict) and len(segments) == 1:
+                    # Check if it's nested like { "segments": [...] }
+                    potential_list = next(iter(segments.values()))
+                    if isinstance(potential_list, list):
+                        segments = potential_list
+                    else:
+                        raise ValueError("Expected a list or a dict containing a list.")
+                else:
+                    raise ValueError("Unexpected JSON structure for segments.")
 
-            # Sort segments by order
-            segments.sort(key=lambda x: x.get("order", 0))
+            except (json.JSONDecodeError, ValueError) as parse_err:
+                logger.error(f"Error parsing segmentation response: {parse_err}. Response: '{response_str[:200]}...'")
+                return default_segment
 
+            # Basic validation and sorting
+            if not isinstance(segments, list) or not all(isinstance(s, dict) for s in segments):
+                logger.error(f"LLM segmentation did not return a list of dicts. Response: '{response_str[:200]}...'")
+                return default_segment
+
+            # Ensure required keys and sort
+            for i, seg in enumerate(segments):
+                seg.setdefault("order", i)  # Assign order if missing
+                seg.setdefault("type", "general")
+                seg.setdefault("task_type", "RETRIEVAL_DOCUMENT")
+                seg.setdefault("metadata", {})
+
+            segments.sort(key=lambda x: x["order"])
+
+            # Optional: Verify content reconstruction
+            # reconstructed = "".join(s['content'] for s in segments)
+            # if reconstructed != text:
+            #    logger.warning("Segmented content differs from original.")
+
+            logger.debug(f"Successfully segmented content into {len(segments)} parts.")
             return segments
 
         except Exception as e:
-            logger.error(f"Error segmenting content: {e}")
-            # Return single segment on error
-            return [
-                {
-                    "content": text,
-                    "type": "general",
-                    "task_type": "RETRIEVAL_DOCUMENT",
-                    "order": 0,
-                    "metadata": {"is_complete_document": True, "confidence": 0.5, "error": str(e)},
-                }
-            ]
+            logger.error(f"Error during content segmentation: {e}")
+            return default_segment
 
-    def get_optimal_task_type(self, text: str, is_query: bool = False) -> str:
-        """
-        Determine the optimal embedding task type for the given content
-
-        Args:
-            text: The text to analyze
-            is_query: Whether this text is a search query
-
-        Returns:
-            The optimal task type for embeddings
-        """
-        analysis = self.analyze_content_type(text)
-
-        # Get recommended task type based on whether this is a query or document
-        key = "query" if is_query else "storage"
-        recommended_type = analysis.get("recommended_task_types", {}).get(key)
-
-        # Use appropriate default if recommendation is missing
-        if not recommended_type:
-            if is_query:
-                if analysis.get("primary_type") == "code":
-                    return "CODE_RETRIEVAL_QUERY"
-                else:
-                    return "RETRIEVAL_QUERY"
-            else:
-                if analysis.get("primary_type") == "question":
-                    return "QUESTION_ANSWERING"
-                else:
-                    return "RETRIEVAL_DOCUMENT"
-
-        return recommended_type
+    # Removed get_optimal_task_type as analyze_content now handles this.

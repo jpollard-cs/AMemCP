@@ -1,4 +1,5 @@
 import json
+import re
 import uuid
 from abc import ABC, abstractmethod
 from typing import Any, Dict, List, Optional
@@ -24,8 +25,6 @@ def simple_tokenize(text):
         return word_tokenize(text)
     except LookupError:
         # Fallback to a simple tokenizer if NLTK resources aren't available
-        import re
-
         return re.findall(r"\b\w+\b", text.lower())
 
 

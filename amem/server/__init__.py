@@ -1,5 +1,5 @@
 """Server components for the Agentic Memory System."""
 
-from amem.server.mcp_fastmcp_server import app as fastmcp_app
+from amem.server.mcp_fastmcp_server import AMemCPServer
 
-__all__ = ["fastmcp_app"]
+__all__ = ["AMemCPServer"]

@@ -5,7 +5,11 @@ Contains common functionality used across multiple modules.
 """
 
 import logging
-from typing import Any, Dict, Optional
+import os
+from collections import defaultdict
+from typing import Optional
+
+from chromadb.config import Settings
 
 try:
     import colorlog
@@ -77,43 +81,56 @@ def setup_logger(name: str, level: int = logging.INFO) -> logging.Logger:
     return logger
 
 
-def get_chroma_settings(persist_directory: Optional[str] = None) -> Dict[str, Any]:
-    """Get ChromaDB settings with version-specific configuration.
+def get_chroma_settings(persist_directory: Optional[str] = None) -> Settings:
+    """Creates a ChromaDB Settings object, prioritizing environment variables.
 
     Args:
-        persist_directory: Directory for persistent storage (optional)
+        persist_directory: The root directory for ChromaDB persistence (if needed by client).
+                           For AsyncHttpClient, this is NOT directly used by the client itself,
+                           but might be used by the server it connects to.
 
     Returns:
-        Dictionary of ChromaDB settings
+        A chromadb.config.Settings object.
     """
-    from chromadb.config import Settings
+    settings_dict = defaultdict(lambda: None)
 
-    settings_dict = {}
+    # --- Client/Server Settings (for HttpClient/AsyncHttpClient) ---
+    # These might be needed if connecting to a remote or specifically configured server
+    settings_dict["chroma_server_host"] = os.environ.get("CHROMA_SERVER_HOST", "localhost")
+    settings_dict["chroma_server_http_port"] = int(os.environ.get("CHROMA_SERVER_HTTP_PORT", 8001))
+    # Typically default to REST API for HttpClients
+    # settings_dict["chroma_api_impl"] = os.environ.get("CHROMA_API_IMPL", "rest")
 
-    # Core settings
+    # --- Persistence Settings (Primarily for the SERVER if using PersistentClient there) ---
+    # Although AsyncHttpClient doesn't use this directly, the SERVER it connects to might.
+    # If persist_directory is provided, include it.
     if persist_directory:
-        settings_dict["persist_directory"] = persist_directory
-        settings_dict["is_persistent"] = True
+        settings_dict["persist_directory"] = os.path.abspath(persist_directory)
+    else:
+        # Default persist directory if not specified
+        settings_dict["persist_directory"] = os.environ.get(
+            "CHROMA_DB_DIR", os.path.abspath(os.path.join(os.getcwd(), "data", "chroma_db"))
+        )
+    # Ensure is_persistent reflects whether a directory is set
+    settings_dict["is_persistent"] = bool(settings_dict.get("persist_directory"))
 
-    # Always allow reset for development convenience
-    settings_dict["allow_reset"] = True
+    # Telemetry
+    settings_dict["anonymized_telemetry"] = os.environ.get("CHROMA_ANONYMIZED_TELEMETRY", "True").lower() == "true"
 
-    # For ChromaDB 1.0.0 compatibility with AsyncHttpClient
-    settings_dict["chroma_server_host"] = "localhost"
-    settings_dict["chroma_server_http_port"] = 8001  # Default is 8000, using 8001 to avoid conflict
+    # Resetting (allow for development)
+    settings_dict["allow_reset"] = os.environ.get("CHROMA_ALLOW_RESET", "True").lower() == "true"
 
-    # Telemetry settings
-    # Disable anonymized telemetry for privacy if needed
-    settings_dict["anonymized_telemetry"] = False
+    # Migrations (usually only relevant for persistent setups)
+    settings_dict["migrations"] = os.environ.get("CHROMA_MIGRATIONS", "apply")
+    settings_dict["migrations_hash_algorithm"] = os.environ.get("CHROMA_MIGRATIONS_HASH_ALGORITHM", "sha256")
 
-    # Maintenance settings
-    # Apply database migrations automatically
-    settings_dict["migrations"] = "apply"
-    # Use SHA-256 for migrations hash (more secure than default MD5)
-    settings_dict["migrations_hash_algorithm"] = "sha256"
+    # Filter out None values before creating Settings object
+    filtered_settings = {k: v for k, v in settings_dict.items() if v is not None}
 
     # Create Settings object with all configured parameters
-    return Settings(**settings_dict)
+    settings = Settings(**filtered_settings)
+
+    return settings
 
 
 # Common constants
@@ -121,6 +138,6 @@ DEFAULT_PERSIST_DIR = "./data/chroma_db"
 DEFAULT_COLLECTION_PREFIX = "amem"
 
 # Default model names
-DEFAULT_GEMINI_LLM_MODEL = "gemini-2.5-pro-exp-03-25"
+DEFAULT_GEMINI_LLM_MODEL = "gemini-2.5-flash-preview-05-20"
 DEFAULT_GEMINI_EMBED_MODEL = "gemini-embedding-exp-03-07"
 DEFAULT_JINA_RERANKER_MODEL = "jinaai/jina-reranker-v2-base-multilingual"

@@ -11,6 +11,7 @@ import os
 from typing import Any, Literal, Optional, Tuple
 
 import torch
+from transformers import AutoModel
 
 # Setup logging
 logger = logging.getLogger(__name__)
@@ -195,8 +196,6 @@ def load_model(model_name_or_path: str, use_gpu: Optional[bool] = None) -> torch
 
         # Here you would have your loading logic, e.g. with HuggingFace transformers
         # For now, just a placeholder:
-        from transformers import AutoModel
-
         logger.info(f"Loading model: {model_name_or_path}")
         model = AutoModel.from_pretrained(model_name_or_path)
 

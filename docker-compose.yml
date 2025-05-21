@@ -6,7 +6,7 @@ services:
     image: amem-mcp-server
     container_name: amem-mcp-server
     ports:
-      - "8000:8000"
+      - "8010:8010"
     volumes:
       - .:/app
       - ./data/chroma_db:/app/data/chroma_db
@@ -26,7 +26,7 @@ services:
 
       # Server configuration
       - HOST=0.0.0.0
-      - PORT=8000
+      - PORT=8010
 
       # Logging configuration
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
@@ -39,7 +39,7 @@ services:
       - PYTORCH_ENABLE_MPS_FALLBACK=1
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/"]
+      test: ["CMD", "curl", "-f", "http://localhost:8010/"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -47,7 +47,7 @@ services:
     command: >
       uvicorn mcp_fastmcp_server:app
       --host 0.0.0.0
-      --port 8000
+      --port 8010
     networks:
       - amem-network
     logging:

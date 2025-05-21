@@ -10,7 +10,7 @@ import uuid
 from datetime import datetime
 from typing import Any, Dict, Optional
 
-from mcp.server.fastmcp import FastMCP
+from fastmcp import FastMCP
 
 # Configure minimal logging
 logging.basicConfig(level=logging.INFO)

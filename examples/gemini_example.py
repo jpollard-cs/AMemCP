@@ -38,7 +38,7 @@ def main():
     memory_system = AgenticMemorySystem(
         project_name="gemini_example",
         llm_backend="gemini",
-        llm_model="gemini-2.5-pro-exp-03-25",
+        llm_model="gemini-2.5-flash-preview-05-20",
         embed_model="gemini-embedding-exp-03-07",
         api_key=google_api_key,
     )
