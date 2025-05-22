@@ -19,28 +19,28 @@ AMemCP combines advanced memory management with intelligent content analysis to 
 graph TB
     Client[MCP Client<br/>Your Agent] <--> Server[FastMCP Server<br/>REST/SSE API]
     Server <--> Memory[Memory System<br/>Core Logic]
-
+    
     Memory --> Storage[Storage Layer]
-    Memory --> Retrieval[Retrieval Layer]
+    Memory --> Retrieval[Retrieval Layer] 
     Memory --> Analysis[Analysis Layer]
-
+    
     Storage --> ChromaDB[ChromaDB<br/>Vector Store]
     Storage --> Cache[In-Memory<br/>Cache]
-
+    
     Retrieval --> Vector[Vector Search<br/>Semantic Similarity]
     Retrieval --> BM25[BM25 Search<br/>Keyword Matching]
     Retrieval --> Reranker[Neural Reranker<br/>Result Refinement]
-
+    
     Analysis --> LLM[LLM Provider<br/>OpenAI/Gemini]
     Analysis --> ContentAnalyzer[Content Analyzer<br/>Type Detection]
     Analysis --> Embedder[Embedding Generator<br/>Task-Optimized]
-
-    style Client fill:#e1f5fe
-    style Server fill:#f3e5f5
-    style Memory fill:#fff3e0
-    style Storage fill:#e8f5e8
-    style Retrieval fill:#fff8e1
-    style Analysis fill:#fce4ec
+    
+    style Client fill:#e3f2fd,stroke:#1976d2,stroke-width:2px,color:#000
+    style Server fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px,color:#000
+    style Memory fill:#fff3e0,stroke:#f57c00,stroke-width:2px,color:#000
+    style Storage fill:#e8f5e8,stroke:#388e3c,stroke-width:2px,color:#000
+    style Retrieval fill:#fff8e1,stroke:#ffa000,stroke-width:2px,color:#000
+    style Analysis fill:#fce4ec,stroke:#c2185b,stroke-width:2px,color:#000
 ```
 
 ## 🚀 Quick Start
@@ -217,14 +217,11 @@ tests/                  # Test suite
 
 ## 🔍 Examples
 
-The `examples/` directory contains comprehensive demonstrations:
+The `examples/` directory contains comprehensive demonstrations of AMemCP functionality. See [`examples/README.md`](examples/README.md) for detailed documentation and usage instructions.
 
-- **`gemini_example.py`**: Basic usage with Gemini models
-- **`gemini_task_types_example.py`**: Embedding task type optimization
-- **`llm_segmentation_example.py`**: Content analysis and segmentation
-
-Run any example:
+Quick start:
 ```bash
+export GOOGLE_API_KEY="your-api-key-here"
 python examples/gemini_example.py
 ```
 
