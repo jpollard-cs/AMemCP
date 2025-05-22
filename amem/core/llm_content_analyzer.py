@@ -37,6 +37,23 @@ class LLMContentAnalyzer(IContentAnalyzer):
         """
         self.llm_controller = llm_controller
 
+    def _get_json_config(self) -> Dict[str, Any]:
+        """
+        Get provider-specific JSON configuration for structured output.
+
+        Returns:
+            Configuration dict appropriate for the current LLM provider
+        """
+        provider_backend = getattr(self.llm_controller, "backend", "unknown").lower()
+
+        if provider_backend == "gemini":
+            return {"response_mime_type": "application/json"}
+        elif provider_backend == "openai":
+            return {"response_format": {"type": "json_object"}}
+        else:
+            # Fallback - try Gemini format first, then OpenAI
+            return {"response_mime_type": "application/json"}
+
     # Make analyze_content async
     async def analyze_content(self, text: str) -> Dict[str, Any]:
         """
@@ -112,13 +129,11 @@ class LLMContentAnalyzer(IContentAnalyzer):
         }
 
         try:
-            # Use the async get_completion method
+            # Use the async get_completion method with provider-agnostic JSON config
+            json_config = self._get_json_config()
             response_str = await self.llm_controller.get_completion(
                 prompt=prompt,
-                # Assuming the LLM supports JSON mode or similar for structured output
-                # The specific format parameter might vary by LLM provider
-                # Use the Gemini-specific config for JSON output
-                config={"response_mime_type": "application/json"},
+                config=json_config,
             )
             analysis = json.loads(response_str)
 
@@ -222,13 +237,11 @@ class LLMContentAnalyzer(IContentAnalyzer):
         ]
 
         try:
-            # Use async get_completion
+            # Use async get_completion with provider-agnostic JSON config
+            json_config = self._get_json_config()
             response_str = await self.llm_controller.get_completion(
                 prompt=prompt,
-                # Assume JSON array output format is supported
-                # Use the Gemini-specific config for JSON output
-                # TODO: abstract this so it will work for any supported LLM
-                config={"response_mime_type": "application/json"},
+                config=json_config,
             )
             # The response might be the JSON array directly, or nested in a key.
             # Handle both common cases.
@@ -276,5 +289,3 @@ class LLMContentAnalyzer(IContentAnalyzer):
         except Exception as e:
             logger.error(f"Error during content segmentation: {e}")
             return default_segment
-
-    # Removed get_optimal_task_type as analyze_content now handles this.

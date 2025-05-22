@@ -1,10 +1,12 @@
 """
 LLM Controller Module
 Handles interactions with various LLM backends and embedding generation.
+
+Note: This module provides a compatibility layer over the provider classes.
+Future versions may use providers directly for better modularity.
 """
 
-from abc import ABC, abstractmethod
-from typing import Any, Dict, List, Optional
+from typing import Dict, List, Optional
 
 # Import the interface
 from amem.core.interfaces import ICompletionProvider, IEmbeddingProvider
@@ -15,20 +17,13 @@ from amem.utils.utils import setup_logger
 logger = setup_logger(__name__)
 
 
-# TODO: I'm not sure we need any of this - why not go directly to the provider or maybe we need some different abstraction, but this just seems to be arbitrarily adding two things together
-# that should be in different places - like get_empty_values seems like it should be in the MemoryNote cdomain model class
-# we can handle this as part of the refactor to separate embedding and completion providers
-class BaseLLMController(ABC):
-    """Base class for LLM Controllers"""
+class LLMController(IEmbeddingProvider, ICompletionProvider):
+    """
+    Controller for LLM completions and embeddings.
 
-    @abstractmethod
-    def get_empty_values(self, current_time: str) -> Dict[str, Any]:
-        """Get empty values for analysis"""
-
-
-# Modify LLMController to implement IEmbeddingProvider
-class LLMController(BaseLLMController, IEmbeddingProvider, ICompletionProvider):
-    """Controller for LLM completions and embeddings."""
+    This class provides a unified interface over different LLM providers.
+    It's essentially a compatibility wrapper around the provider classes.
+    """
 
     def __init__(
         self, backend: str = "openai", model: str = None, embed_model: str = None, api_key: str = None, **kwargs
@@ -45,23 +40,6 @@ class LLMController(BaseLLMController, IEmbeddingProvider, ICompletionProvider):
         logger.info(
             f"Initialized LLM Controller with provider: {backend}, model: {self.model}, embed_model: {self.embed_model}"
         )
-
-    def get_empty_values(self, current_time: str) -> Dict[str, Any]:
-        """Get empty values for the note metadata"""
-        # This might be better placed elsewhere (e.g., in MemoryNote defaults or a factory)
-        # but kept here for now during refactoring.
-        return {
-            "keywords": [],
-            "context": "",
-            "summary": "",
-            "type": "general",
-            "created_at": current_time,
-            "updated_at": current_time,
-            "related_notes": [],
-            "sentiment": "neutral",
-            "importance": 0.5,
-            "tags": [],
-        }
 
     async def get_completion(self, prompt: str, config: Optional[Dict] = None, **kwargs) -> str:
         """Get completion from the provider (async)"""

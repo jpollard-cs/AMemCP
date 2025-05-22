@@ -52,6 +52,7 @@ class ServerConfig:
     enable_llm_analysis: bool = os.getenv("ENABLE_LLM_ANALYSIS", "true").lower() == "true"
     enable_auto_segmentation: bool = os.getenv("ENABLE_AUTO_SEGMENTATION", "false").lower() == "true"
     load_existing: bool = os.getenv("LOAD_EXISTING_ON_STARTUP", "true").lower() == "true"
+    reranker_model: Optional[str] = os.getenv("RERANKER_MODEL")
 
     collection_name: str = field(init=False)
 
@@ -99,8 +100,7 @@ class AMemCPServer:
         analyzer = LLMContentAnalyzer(llm_ctrl)
 
         # Instantiate the reranker
-        # TODO: Make model_name configurable
-        reranker_model_name = "jinaai/jina-reranker-v2-base-multilingual"
+        reranker_model_name = self.cfg.reranker_model or "jinaai/jina-reranker-v2-base-multilingual"
         try:
             reranker = JinaReranker(model_name=reranker_model_name)
             if not reranker._initialized:  # Check if model loading failed in __init__
@@ -147,34 +147,11 @@ class AMemCPServer:
     def _handle_tool_errors(self, func):
         @wraps(func)
         async def wrapper(*args, **kwargs):
-            tool_name = func.__name__
             try:
-                # Assuming the original function might take self if it were a method,
-                # but these are closures here, so args[0] isn't self.
-                # We call the original async tool function
                 return await func(*args, **kwargs)
             except Exception as e:
-                # Log the full error internally
-                log_message = f"Error in {tool_name} tool: {e}"
-                # Add relevant args to log if possible (e.g., memory_id)
-                if "memory_id" in kwargs:
-                    log_message += f" (id: {kwargs['memory_id']})"
-                elif args:  # Try positional arg for memory_id
-                    # This is fragile, depends on arg order
-                    if isinstance(args[0], str) and len(args[0]) > 30:  # Heuristic for UUID-like ID
-                        log_message += f" (id: {args[0]})"
-
-                self.logger.error(log_message, exc_info=True)
-
-                # Prepare standard error response
-                error_response = {"error": True, "message": f"Failed in {tool_name}: {str(e)}"}
-                # Add ID back to response if relevant
-                if "memory_id" in kwargs:
-                    error_response["id"] = kwargs["memory_id"]
-                elif args and isinstance(args[0], str) and len(args[0]) > 30:
-                    error_response["id"] = args[0]
-
-                return error_response
+                self.logger.error(f"Error in {func.__name__}: {e}", exc_info=True)
+                return {"error": f"Tool '{func.__name__}' failed: {str(e)}"}
 
         return wrapper
 
@@ -308,24 +285,3 @@ class AMemCPServer:
             port=self.cfg.port,
             log_level=self.cfg.log_level,
         )
-
-
-# if __name__ == "__main__":
-#     # Load .env here if running directly
-#     try:
-#         from dotenv import find_dotenv, load_dotenv
-#         dotenv_path = find_dotenv(usecwd=True)
-#         if dotenv_path:
-#             print(f"Loading environment variables from: {dotenv_path}")
-#             load_dotenv(dotenv_path, override=True)
-#             # Re-create config and server instance after loading .env
-#             cfg = ServerConfig()
-#             server = AMemCPServer(cfg)
-#         else:
-#             print("No .env file found.")
-#     except ImportError:
-#         print("python-dotenv not installed, skipping .env load.")
-#     except Exception as e:
-#         print(f"Error loading .env file: {e}")
-#
-#     server.run()

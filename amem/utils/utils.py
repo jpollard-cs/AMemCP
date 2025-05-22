@@ -9,15 +9,8 @@ import os
 from collections import defaultdict
 from typing import Optional
 
+import colorlog
 from chromadb.config import Settings
-
-try:
-    import colorlog
-
-    has_colorlog = True
-except ImportError:
-    has_colorlog = False
-    print("For colorful logs, install colorlog: pip install colorlog")
 
 
 def setup_logger(name: str, level: int = logging.INFO) -> logging.Logger:
@@ -39,38 +32,30 @@ def setup_logger(name: str, level: int = logging.INFO) -> logging.Logger:
     # Prevent propagation to the root logger to avoid duplicate logs
     logger.propagate = False
 
-    # Configure with our custom handler
-    if has_colorlog:
-        # Create a colorlog handler
-        handler = colorlog.StreamHandler()
-        handler.setFormatter(
-            colorlog.ColoredFormatter(
-                "%(log_color)s%(asctime)s [%(name)s] %(levelname)s: %(message)s",
-                datefmt="%Y-%m-%d %H:%M:%S",
-                log_colors={
+    # Create a colorlog handler
+    handler = colorlog.StreamHandler()
+    handler.setFormatter(
+        colorlog.ColoredFormatter(
+            "%(log_color)s%(asctime)s [%(name)s] %(levelname)s: %(message)s",
+            datefmt="%Y-%m-%d %H:%M:%S",
+            log_colors={
+                "DEBUG": "cyan",
+                "INFO": "green",
+                "WARNING": "yellow",
+                "ERROR": "red",
+                "CRITICAL": "red,bg_white",
+            },
+            secondary_log_colors={
+                "message": {
                     "DEBUG": "cyan",
-                    "INFO": "green",
+                    "INFO": "white",
                     "WARNING": "yellow",
                     "ERROR": "red",
                     "CRITICAL": "red,bg_white",
-                },
-                secondary_log_colors={
-                    "message": {
-                        "DEBUG": "cyan",
-                        "INFO": "white",
-                        "WARNING": "yellow",
-                        "ERROR": "red",
-                        "CRITICAL": "red,bg_white",
-                    }
-                },
-            )
+                }
+            },
         )
-    else:
-        # Standard handler without colors
-        handler = logging.StreamHandler()
-        handler.setFormatter(
-            logging.Formatter("%(asctime)s [%(name)s] %(levelname)s: %(message)s", datefmt="%Y-%m-%d %H:%M:%S")
-        )
+    )
 
     # Set the log level
     logger.setLevel(level)

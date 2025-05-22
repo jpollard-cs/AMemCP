@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import asyncio
 import os
+import random
 from abc import ABC, abstractmethod
 from time import perf_counter
 from typing import Dict, List, Optional
@@ -24,13 +25,46 @@ logger = setup_logger(__name__)
 # --------------------------------------------------------------------------- #
 
 
-# TODO: extract and create a more robust generic timeout mechanism that's configurabe and w/ retry and backoff logic
+async def _with_timeout_and_retry(
+    coro_factory, timeout_seconds: int, task: str, max_retries: int = 2, backoff_factor: float = 1.5
+):
+    """
+    Run coroutine with timeout, retry logic, and exponential backoff.
+
+    Args:
+        coro_factory: Function that returns a fresh coroutine for each attempt
+        timeout_seconds: Timeout for each individual attempt
+        task: Description of the task for error messages
+        max_retries: Maximum number of retry attempts (0 = no retries)
+        backoff_factor: Multiplier for delay between retries
+    """
+    last_exception = None
+
+    for attempt in range(max_retries + 1):
+        try:
+            coro = coro_factory() if callable(coro_factory) else coro_factory
+            return await asyncio.wait_for(coro, timeout_seconds)
+        except asyncio.TimeoutError as e:
+            last_exception = e
+            if attempt < max_retries:
+                delay = backoff_factor**attempt + random.uniform(0, 0.1)  # Add jitter
+                logger.warning(f"{task} timeout on attempt {attempt + 1}/{max_retries + 1}, retrying in {delay:.2f}s")
+                await asyncio.sleep(delay)
+            else:
+                break
+        except Exception as e:
+            # For non-timeout errors, don't retry
+            logger.error(f"{task} failed with non-timeout error: {e}")
+            raise
+
+    raise RuntimeError(
+        f"{task} failed after {max_retries + 1} attempts (timeout: {timeout_seconds}s)"
+    ) from last_exception
+
+
 async def _with_timeout(coro, seconds: int, task: str):
-    """Run *coro* with timeout and a nicer error."""
-    try:
-        return await asyncio.wait_for(coro, seconds)
-    except asyncio.TimeoutError:
-        raise RuntimeError(f"{task} timed‑out after {seconds}s") from None
+    """Simple timeout wrapper for backward compatibility."""
+    return await _with_timeout_and_retry(lambda: coro, seconds, task, max_retries=0)
 
 
 # --------------------------------------------------------------------------- #
@@ -38,12 +72,19 @@ async def _with_timeout(coro, seconds: int, task: str):
 # --------------------------------------------------------------------------- #
 
 
-# TODO get rid of duplication
 class BaseLLMProvider(ABC):
-    """Async‑first provider base."""
+    """Async‑first provider base with common functionality."""
 
-    def __init__(self, api_key: Optional[str]):
+    def __init__(self, api_key: Optional[str], model: str, embed_model: str, provider_name: str):
         self.api_key = api_key
+        self.model = model
+        self.embed_model = embed_model
+        self.provider_name = provider_name
+
+        if not self.api_key:
+            raise ValueError(f"{provider_name} API key missing")
+
+        logger.info(f"{provider_name} provider ready (%s / %s)", model, embed_model)
 
     # async interface ------------------------------------------------------- #
     @abstractmethod
@@ -65,12 +106,9 @@ class OpenAIProvider(BaseLLMProvider):
         embed_model: str = "text-embedding-ada-002",
         api_key: Optional[str] = None,
     ):
-        super().__init__(api_key or os.getenv("OPENAI_API_KEY"))
-        if not self.api_key:
-            raise ValueError("OPENAI_API_KEY missing")
-
-        self.model = model
-        self.embed_model = embed_model
+        super().__init__(
+            api_key=api_key or os.getenv("OPENAI_API_KEY"), model=model, embed_model=embed_model, provider_name="OpenAI"
+        )
 
         # LangChain async‑ready clients
         self.chat = ChatOpenAI(model=model, api_key=self.api_key, temperature=0.2)
@@ -78,8 +116,6 @@ class OpenAIProvider(BaseLLMProvider):
 
         # raw async client for last‑resort fallback
         self._aio_openai = AsyncOpenAI(api_key=self.api_key)
-
-        logger.info("OpenAI provider ready (%s / %s)", model, embed_model)
 
     # --------------------------------------------------------------------- #
 
@@ -118,20 +154,23 @@ class OpenAIProvider(BaseLLMProvider):
     async def get_embeddings(self, text: str, task_type: Optional[str] = None) -> List[float]:
         t0 = perf_counter()
         try:
-            emb = await _with_timeout(self.embed.aembed_query(text), 15, "OpenAI embedding")
+            emb = await _with_timeout_and_retry(
+                lambda: self.embed.aembed_query(text), 15, "OpenAI embedding", max_retries=1
+            )
             logger.info("OpenAI embedding in %.2fs", perf_counter() - t0)
             return emb
         except Exception as exc:
             logger.warning("LangChain embedding failed: %s – trying raw OpenAI", exc)
 
-        resp = await _with_timeout(
-            self._aio_openai.embeddings.create(
+        resp = await _with_timeout_and_retry(
+            lambda: self._aio_openai.embeddings.create(
                 model=self.embed_model,
                 input=[text],
                 encoding_format="float",
             ),
             15,
             "raw OpenAI embedding",
+            max_retries=1,
         )
         if not resp.data or len(resp.data) == 0:
             raise RuntimeError("No embedding data returned from OpenAI")
@@ -151,19 +190,17 @@ class GeminiProvider(BaseLLMProvider):
         embed_model: str = "gemini-embedding-exp-03-07",
         api_key: Optional[str] = None,
     ):
-        super().__init__(api_key or os.getenv("GOOGLE_API_KEY"))
-        if not self.api_key:
-            raise ValueError("GOOGLE_API_KEY missing")
+        super().__init__(
+            api_key=api_key or os.getenv("GOOGLE_API_KEY"), model=model, embed_model=embed_model, provider_name="Gemini"
+        )
 
-        self.model = model
+        # Gemini needs the model prefix for embeddings
         self.embed_model = f"models/{embed_model}"
 
         self.chat = ChatGoogleGenerativeAI(model=model, api_key=self.api_key, temperature=0.2)
         self.embed_default = GoogleGenerativeAIEmbeddings(
             model=self.embed_model, api_key=self.api_key, task_type="RETRIEVAL_DOCUMENT"
         )
-
-        logger.info("Gemini provider ready (%s / %s)", model, embed_model)
 
     # --------------------------------------------------------------------- #
 
